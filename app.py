@@ -43,21 +43,27 @@ with tab_screen:
     else:
         chosen_date = st.selectbox("Data migawki", dates, index=0)
         df = db.load_snapshot(chosen_date)
+        if "Rynek" not in df.columns:
+            df["Rynek"] = "Nieznany (stara migawka sprzed dodania filtra rynków)"
 
         only_verified = st.checkbox("Pokaż tylko tickery ręcznie zweryfikowane na XTB", value=False)
         if only_verified and VERIFIED_TICKERS:
             df = df[df["Ticker"].isin(VERIFIED_TICKERS)]
 
-        col1, col2, col3 = st.columns(3)
+        col1, col2, col3, col4 = st.columns(4)
         with col1:
             kind_filter = st.multiselect("Typ", ["stock", "etf"], default=["stock", "etf"])
         with col2:
-            min_score = st.slider("Min. Buy Score", 0, 9, 0)
+            market_options = sorted(df["Rynek"].dropna().unique().tolist())
+            market_filter = st.multiselect("Rynek / kraj", market_options, default=market_options)
         with col3:
+            min_score = st.slider("Min. Buy Score", 0, 9, 0)
+        with col4:
             max_ath = st.slider("Maks. % od ATH (np. -30 = co najmniej -30%)", -90, 0, 0)
 
         filtered = df[
             df["Typ"].isin(kind_filter)
+            & df["Rynek"].isin(market_filter)
             & (df["Buy Score"] >= min_score)
             & (df["pct_from_ath"] <= max_ath)
         ].sort_values("Buy Score", ascending=False)
@@ -82,9 +88,11 @@ with tab_deep:
         st.info("Brak danych — uruchom skan.")
     else:
         df = db.load_snapshot(dates[0])
+        if "Rynek" not in df.columns:
+            df["Rynek"] = "Nieznany"
         deep = df[df["Typ"] == "stock"].sort_values("Deep Value Score", ascending=False).head(30)
         st.dataframe(
-            deep[["Ticker", "Nazwa", "Cena", "pct_from_ath", "ROE (%)", "Marża Operac. (%)",
+            deep[["Ticker", "Nazwa", "Rynek", "Cena", "pct_from_ath", "ROE (%)", "Marża Operac. (%)",
                   "Wzrost EPS (%)", "Dług/Kapitał", "RSI", "Deep Value Score", "Buy Score"]],
             use_container_width=True, height=600,
         )
