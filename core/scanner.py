@@ -1,0 +1,261 @@
+"""
+Silnik analityczny — oparty na oryginalnym skrypcie użytkownika, przerobiony
+na funkcje wielokrotnego użytku (zamiast liniowego skryptu) tak, żeby mogły
+z niego korzystać: cronowy scan dzienny (scripts/run_daily_scan.py) i appka
+Streamlit (do przeliczeń "na żywo" / backtestu z historii cen).
+"""
+from __future__ import annotations
+
+import io
+import random
+import time
+import warnings
+from datetime import datetime
+
+import numpy as np
+import pandas as pd
+import requests
+import yfinance as yf
+
+warnings.filterwarnings("ignore", category=FutureWarning)
+warnings.filterwarnings("ignore", category=UserWarning)
+
+HISTORICAL_PERIOD = "10y"
+DELAY_MIN, DELAY_MAX = 0.4, 0.9
+
+if hasattr(yf, "config"):
+    yf.config.network.retries = 3
+    yf.config.debug.hide_exceptions = True
+
+
+def get_sp500_map() -> dict[str, str]:
+    url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
+    headers = {"User-Agent": "Mozilla/5.0"}
+    try:
+        response = requests.get(url, headers=headers, timeout=15)
+        table = pd.read_html(io.StringIO(response.text))[0]
+        table["Symbol"] = table["Symbol"].str.replace(".", "-", regex=False)
+        return dict(zip(table["Symbol"], table["Security"]))
+    except Exception as e:  # noqa: BLE001
+        print(f"⚠️ Nie udało się pobrać S&P 500 z Wikipedii ({e}), używam skróconej listy.")
+        return {"AAPL": "Apple Inc.", "MSFT": "Microsoft Corp."}
+
+
+def run_monte_carlo(data: pd.DataFrame) -> tuple[float, float]:
+    returns = data["Close"].pct_change().dropna()
+    if len(returns) < 30:
+        return 0, 0
+    mu, sigma = returns.mean(), returns.std()
+    last = float(data["Close"].iloc[-1])
+    sims = [last * (1 + np.random.normal(mu, sigma, 30)).prod() for _ in range(30)]
+    med = np.median(sims)
+    return round(med, 2), round(((med - last) / last) * 100, 1)
+
+
+def get_current_price(tk: "yf.Ticker", df: pd.DataFrame) -> float | None:
+    try:
+        fi = tk.fast_info
+        p = fi.get("lastPrice") or fi.get("last_price")
+        if p and not pd.isna(p):
+            return float(p)
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        info = tk.info or {}
+        for key in ("currentPrice", "regularMarketPrice", "previousClose"):
+            p = info.get(key)
+            if p and not pd.isna(p):
+                return float(p)
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        closes = df["Close"].dropna()
+        if not closes.empty:
+            return float(closes.iloc[-1])
+    except Exception:  # noqa: BLE001
+        pass
+    return None
+
+
+def _safe_get(info: dict, key: str, is_pct: bool = False):
+    val = info.get(key)
+    if val is None or pd.isna(val):
+        return None
+    return round(val * 100, 2) if is_pct else round(val, 2)
+
+
+def compute_indicators(df: pd.DataFrame, price: float, as_of: pd.Timestamp | None = None) -> dict:
+    """
+    Liczy wskaźniki techniczne z historii OHLC do momentu `as_of` (włącznie).
+    Gdy as_of=None -> ostatni dostępny dzień. To jest podstawa "szybkiego"
+    backtestu: wystarczy obciąć df do danej daty i przeliczyć od nowa.
+    """
+    d = df if as_of is None else df.loc[:as_of]
+    if len(d) < 30:
+        return {}
+
+    ath = float(d["High"].max())
+    atl = float(d["Low"].min())
+    pct_from_ath = round(((price - ath) / ath) * 100, 1)
+
+    delta = d["Close"].diff()
+    gain = delta.where(delta > 0, 0).rolling(14).mean()
+    loss = -delta.where(delta < 0, 0).rolling(14).mean()
+    rsi = float((100 - (100 / (1 + gain / loss))).iloc[-1])
+
+    macd_line = d["Close"].ewm(span=12).mean() - d["Close"].ewm(span=26).mean()
+    macd_signal = macd_line.ewm(span=9).mean()
+
+    sma20 = float(d["Close"].rolling(20).mean().iloc[-1])
+    sma50 = float(d["Close"].rolling(50).mean().iloc[-1]) if len(d) >= 50 else None
+    sma100 = float(d["Close"].rolling(100).mean().iloc[-1]) if len(d) >= 100 else None
+    sma200 = float(d["Close"].rolling(200).mean().iloc[-1]) if len(d) >= 200 else None
+
+    std20 = d["Close"].rolling(20).std().iloc[-1]
+    b_low, b_up = sma20 - (std20 * 2), sma20 + (std20 * 2)
+    b_pct = float((price - b_low) / (b_up - b_low)) if (b_up - b_low) != 0 else 0.5
+
+    v_rat = float(d["Volume"].iloc[-1] / d["Volume"].rolling(20).mean().iloc[-1])
+    p_low = d["Low"].shift(1).rolling(20).min().iloc[-1]
+    smc = "💎 SMC BUY" if (d["Low"].iloc[-1] < p_low and price > p_low and v_rat > 1.2) else "Neutralny"
+    mc_target, mc_pct = run_monte_carlo(d)
+
+    return dict(
+        ATH=round(ath, 2), ATL=round(atl, 2), pct_from_ath=pct_from_ath,
+        RSI=round(rsi, 1), MACD=round(float(macd_line.iloc[-1]), 2),
+        macd_bullish=bool(macd_line.iloc[-1] > macd_signal.iloc[-1]),
+        SMA20=round(sma20, 2) if sma20 else None,
+        SMA50=round(sma50, 2) if sma50 else None,
+        SMA100=round(sma100, 2) if sma100 else None,
+        SMA200=round(sma200, 2) if sma200 else None,
+        bollinger_pct=round(b_pct, 2), volume_ratio=round(v_rat, 2),
+        smc=smc, mc_target=mc_target, mc_pct=mc_pct,
+    )
+
+
+def score_row(price: float, ind: dict, fund: dict) -> int:
+    """Suma sygnałów kupna — sama technika + potwierdzenie fundamentalne."""
+    sma200 = ind.get("SMA200")
+    signals = [
+        ind.get("RSI") is not None and ind["RSI"] < 35,
+        ind.get("macd_bullish"),
+        ind.get("SMA20") and price > ind["SMA20"],
+        ind.get("SMA50") and price > ind["SMA50"],
+        ind.get("bollinger_pct") is not None and ind["bollinger_pct"] < 0.15,
+        ind.get("volume_ratio") is not None and ind["volume_ratio"] > 1.3,
+        ind.get("smc") == "💎 SMC BUY",
+        ind.get("mc_pct") is not None and ind["mc_pct"] > 3,
+        ind.get("pct_from_ath") is not None and ind["pct_from_ath"] < -15,
+    ]
+    return int(sum(1 for s in signals if s))
+
+
+def deep_value_score(ind: dict, fund: dict) -> int:
+    """
+    Dedykowany score pod strategię "duży spadek od ATH, ale biznes wciąż
+    zdrowy": karze spadek od ATH mocniej, ale wymaga potwierdzenia jakości
+    biznesu (ROE, marża, wzrost EPS, dług), żeby odsiać "spadające noże".
+    """
+    pts = 0
+    ath = ind.get("pct_from_ath")
+    if ath is not None:
+        if ath < -50:
+            pts += 3
+        elif ath < -30:
+            pts += 2
+        elif ath < -15:
+            pts += 1
+    roe = fund.get("ROE (%)")
+    if isinstance(roe, (int, float)) and roe > 12:
+        pts += 2
+    op_margin = fund.get("Marża Operac. (%)")
+    if isinstance(op_margin, (int, float)) and op_margin > 10:
+        pts += 1
+    eps_growth = fund.get("Wzrost EPS (%)")
+    if isinstance(eps_growth, (int, float)) and eps_growth > 0:
+        pts += 2
+    debt_eq = fund.get("Dług/Kapitał")
+    if isinstance(debt_eq, (int, float)) and debt_eq < 100:
+        pts += 1
+    rsi = ind.get("RSI")
+    if rsi is not None and rsi < 40:
+        pts += 1
+    return pts
+
+
+def analyze_ticker(ticker: str, full_name: str, kind: str = "stock") -> dict | None:
+    """Analizuje jeden ticker "na żywo" (dzisiejsze dane). Zwraca None, gdy brak danych."""
+    tk = yf.Ticker(ticker)
+    df = tk.history(period=HISTORICAL_PERIOD, interval="1d", auto_adjust=True, actions=True)
+    if df.empty or len(df) < 200:
+        return None
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.get_level_values(0)
+
+    price = get_current_price(tk, df)
+    if price is None:
+        return None
+
+    try:
+        info = tk.info or {}
+    except Exception:  # noqa: BLE001
+        info = {}
+
+    fund = {
+        "C/Z (P/E)": _safe_get(info, "trailingPE") or "BRAK",
+        "Forward C/Z": _safe_get(info, "forwardPE") or "BRAK",
+        "C/WK (P/B)": _safe_get(info, "priceToBook") or "BRAK",
+        "ROE (%)": _safe_get(info, "returnOnEquity", is_pct=True) or "BRAK",
+        "Marża Operac. (%)": _safe_get(info, "operatingMargins", is_pct=True) or "BRAK",
+        "Dług/Kapitał": _safe_get(info, "debtToEquity") or "BRAK",
+        "Wzrost EPS (%)": _safe_get(info, "earningsGrowth", is_pct=True) or "BRAK",
+    }
+
+    curr_y = datetime.now().year
+    div_yield = "BRAK"
+    if "Dividends" in df.columns:
+        divs = df["Dividends"]
+        if not divs.empty and divs.sum() > 0:
+            by_year = divs.groupby(divs.index.year).sum()
+            last_div = round(float(by_year.get(curr_y - 1, 0)), 2)
+            if last_div > 0 and price > 0:
+                div_yield = round((last_div / price) * 100, 2)
+
+    ind = compute_indicators(df, price)
+    if not ind:
+        return None
+
+    row = {
+        "Ticker": ticker, "Nazwa": full_name, "Typ": kind, "Cena": round(price, 2),
+        "Stopa Dyw. (%)": div_yield, **fund, **ind,
+        "Buy Score": score_row(price, ind, fund),
+        "Deep Value Score": deep_value_score(ind, fund),
+    }
+    return row
+
+
+def analyze_group(ticker_map: dict[str, str], kind: str = "stock", label: str = "") -> list[dict]:
+    results, skipped = [], []
+    for t, name in ticker_map.items():
+        try:
+            row = analyze_ticker(t, name, kind=kind)
+            if row is None:
+                skipped.append(t)
+            else:
+                results.append(row)
+        except Exception as e:  # noqa: BLE001
+            skipped.append(f"{t} ({type(e).__name__})")
+        finally:
+            time.sleep(random.uniform(DELAY_MIN, DELAY_MAX))
+    if skipped:
+        print(f"⚠️ {label}: pominięto {len(skipped)}/{len(ticker_map)}: {skipped[:10]}")
+    return results
+
+
+def price_history_for_backtest(ticker: str) -> pd.DataFrame:
+    """Pobiera historię cen jednej spółki — do przeliczania wskaźników wstecz."""
+    tk = yf.Ticker(ticker)
+    df = tk.history(period=HISTORICAL_PERIOD, interval="1d", auto_adjust=True, actions=True)
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.get_level_values(0)
+    return df
