@@ -12,7 +12,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from config.markets import STOCK_GROUPS, ETF_MAP  # noqa: E402
-from core.scanner import analyze_group, get_sp500_map  # noqa: E402
+from core.scanner import analyze_group, get_sp500_map, get_sp400_map  # noqa: E402
 from core.db import save_snapshot  # noqa: E402
 
 
@@ -22,6 +22,7 @@ def main() -> None:
 
     groups = dict(STOCK_GROUPS)
     groups["USA (S&P 500)"] = get_sp500_map()
+    groups["USA (S&P 400 MidCap)"] = get_sp400_map()
 
     for label, ticker_map in groups.items():
         print(f"🔄 {label} ({len(ticker_map)} tickerów)...")

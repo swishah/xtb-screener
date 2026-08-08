@@ -66,6 +66,75 @@ ETF_MAP = {
     "SEMI.L": "iShares MSCI Global Semiconductors UCITS ETF",
 }
 
+# sWIG80 — pełny, aktualny skład (sierpień 2026).
+SWIG80_MAP_RAW = {
+    "11B.WA": "11 bit studios", "1AT.WA": "Atal", "ABS.WA": "Asseco Business Solutions", "AGO.WA": "Agora",
+    "AMB.WA": "Ambra", "AMC.WA": "Amica", "ANR.WA": "Answear.com", "APT.WA": "Apator", "ARH.WA": "Archicom",
+    "ARL.WA": "Arlen", "AST.WA": "Astarta Holding", "ATC.WA": "Arctic Paper", "ATR.WA": "Atrem",
+    "BCX.WA": "Bioceltix", "BIO.WA": "Bioton", "BLO.WA": "Bloober Team", "BMC.WA": "Bumech",
+    "BOS.WA": "Bank Ochrony Środowiska", "BRS.WA": "Boryszew", "CIG.WA": "CI Games", "CLN.WA": "Celon Pharma",
+    "CMP.WA": "Comp", "COG.WA": "Cognor", "CRJ.WA": "Creepy Jar", "CRQ.WA": "Creotech Quantum",
+    "CTX.WA": "Captor Therapeutics", "DAD.WA": "Dadelo", "DAT.WA": "DataWalk", "DCR.WA": "Decora",
+    "DIG.WA": "Digital Network", "ECH.WA": "Echo Investment", "ELT.WA": "Elektrotim", "ENT.WA": "Enter Air",
+    "ERB.WA": "Erbud", "EUR.WA": "Eurocash", "FRO.WA": "Ferro", "FTE.WA": "Fabryki Mebli Forte",
+    "GRX.WA": "GreenX Metals", "HUG.WA": "Huuuge", "ICE.WA": "Medinice", "IMC.WA": "Industrial Milk Company",
+    "KGN.WA": "Kogeneracja", "LWB.WA": "Bogdanka", "MCI.WA": "MCI Capital", "MDG.WA": "Medicalgorithmics",
+    "MLG.WA": "MLP Group", "MNC.WA": "Mennica Polska", "MRC.WA": "Mercator Medical", "MSZ.WA": "Mostostal Zabrze",
+    "OND.WA": "Onde", "OPN.WA": "Oponeo.pl", "PCR.WA": "PCC Rokita", "PLW.WA": "PlayWay",
+    "QRS.WA": "Quercus TFI", "REX.WA": "Rex Concepts", "ROB.WA": "Robyg", "RVU.WA": "Ryvu Therapeutics",
+    "SCP.WA": "Scope Fluidics", "SCW.WA": "Scanway", "SEL.WA": "Selena FM", "SGN.WA": "Sygnity",
+    "SKA.WA": "Śnieżka", "SLV.WA": "Selvita", "SNK.WA": "Sanok Rubber", "STP.WA": "Stalprodukt",
+    "STX.WA": "Stalexport Autostrady", "SVE.WA": "Synthaverse", "TAR.WA": "Tarczyński", "TOA.WA": "Toya",
+    "TOR.WA": "Torpol", "UNI.WA": "Unibep", "UNT.WA": "Unimot", "VGO.WA": "Vigo Photonics",
+    "VOT.WA": "Votum", "VRG.WA": "VRG (Vistula)", "WLT.WA": "Wielton", "WTN.WA": "Wittchen",
+    "WWL.WA": "Wawel", "ZEP.WA": "ZE PAK", "ZRE.WA": "Zremb-Chojnice",
+}
+# sWIG80 rebalansuje się kwartalnie i część spółek bywa jednocześnie "na liście
+# rezerwowej" w WIG20/mWIG40 z powodu ręcznie utrzymywanych map wyżej — usuwamy
+# duplikaty, żeby nie skanować tej samej spółki dwa razy.
+SWIG80_MAP = {t: n for t, n in SWIG80_MAP_RAW.items() if t not in WIG20_MAP and t not in MWIG40_MAP}
+
+# FTSE MIB (Włochy, Borsa Italiana) — stan na sierpień 2026. Kilka spółek jest
+# formalnie zarejestrowanych w Holandii, ale notowanych głównie w Mediolanie
+# (Stellantis, Ferrari, Campari, STMicroelectronics, Iveco Group) — ich sufiks
+# Yahoo Finance bywa niejednoznaczny, warto zweryfikować przy pierwszym skanie.
+FTSEMIB_MAP = {
+    "A2A.MI": "A2A", "AMP.MI": "Amplifon", "AVIO.MI": "Avio", "AZM.MI": "Azimut",
+    "BMED.MI": "Banca Mediolanum", "BMPS.MI": "Banca Monte dei Paschi di Siena", "BAMI.MI": "Banco BPM",
+    "BPE.MI": "BPER Banca", "BC.MI": "Brunello Cucinelli", "BZU.MI": "Buzzi",
+    "CPR.MI": "Campari (Davide Campari-Milano)", "DIA.MI": "DiaSorin", "ENEL.MI": "Enel", "ENI.MI": "Eni",
+    "RACE.MI": "Ferrari", "FCT.MI": "Fincantieri", "FBK.MI": "FinecoBank", "G.MI": "Generali",
+    "HER.MI": "Hera", "ISP.MI": "Intesa Sanpaolo", "IP.MI": "Interpump Group", "INW.MI": "Inwit",
+    "IG.MI": "Italgas", "IVG.MI": "Iveco Group", "LDO.MI": "Leonardo", "LTMC.MI": "Lottomatica Group",
+    "MB.MI": "Mediobanca", "MONC.MI": "Moncler", "NEXI.MI": "Nexi", "PST.MI": "Poste Italiane",
+    "PRY.MI": "Prysmian", "REC.MI": "Recordati", "SPM.MI": "Saipem", "SRG.MI": "Snam",
+    "STLAM.MI": "Stellantis", "STM.MI": "STMicroelectronics", "TIT.MI": "Telecom Italia", "TEN.MI": "Tenaris",
+    "TRN.MI": "Terna", "UCG.MI": "UniCredit", "UNI.MI": "Unipol",
+}
+
+# ATX (Austria, Wiener Börse) — ok. 20 głównych spółek, stan orientacyjny
+# sierpień 2026, zweryfikuj przy pierwszym skanie (kilka tickerów może się
+# różnić w zależności od klasy akcji).
+ATX_MAP = {
+    "EBS.VI": "Erste Group Bank", "OMV.VI": "OMV", "VER.VI": "Verbund", "VOE.VI": "voestalpine",
+    "RBI.VI": "Raiffeisen Bank International", "WIE.VI": "Wienerberger", "ANDR.VI": "Andritz",
+    "EVN.VI": "EVN", "VIG.VI": "Vienna Insurance Group", "UQA.VI": "Uniqa Insurance",
+    "TKA.VI": "Telekom Austria", "MMK.VI": "Mayr-Melnhof Karton", "IIA.VI": "Immofinanz",
+    "CAI.VI": "CA Immobilien Anlagen", "ATS.VI": "AT&S", "SBO.VI": "Schoeller-Bleckmann Oilfield Equipment",
+    "LNZ.VI": "Lenzing", "POST.VI": "Österreichische Post", "FLU.VI": "Flughafen Wien", "POS.VI": "PORR",
+}
+
+# PSI (Portugalia, Euronext Lisbon) — ok. 16 głównych spółek, stan orientacyjny
+# sierpień 2026, zweryfikuj przy pierwszym skanie.
+PSI_MAP = {
+    "EDP.LS": "EDP - Energias de Portugal", "EDPR.LS": "EDP Renováveis", "GALP.LS": "Galp Energia",
+    "JMT.LS": "Jerónimo Martins", "NOS.LS": "NOS", "RENE.LS": "REN - Redes Energéticas Nacionais",
+    "SON.LS": "Sonae", "CTT.LS": "CTT - Correios de Portugal", "EGL.LS": "Mota-Engil",
+    "SEM.LS": "Semapa", "NVG.LS": "Navigator Company", "COR.LS": "Corticeira Amorim",
+    "BCP.LS": "Banco Comercial Português (Millennium bcp)", "IPR.LS": "Impresa", "ALTR.LS": "Altri",
+    "IBS.LS": "Ibersol",
+}
+
 # Tickery ręcznie potwierdzone przez Ciebie jako dostępne na koncie XTB.
 # Zostaw pustą listę, żeby na starcie nie filtrować niczego — a docelowo
 # uzupełniaj w miarę weryfikacji w platformie.
@@ -73,12 +142,16 @@ VERIFIED_TICKERS: set[str] = set()
 
 STOCK_GROUPS = {
     "Polska (WIG20+mWIG40)": {**WIG20_MAP, **MWIG40_MAP},
+    "Polska (sWIG80)": SWIG80_MAP,
     "Niemcy (DAX)": DAX_MAP,
     "Francja (CAC 40)": CAC40_MAP,
     "UK (FTSE 100)": FTSE_MAP,
     "Hiszpania (IBEX 35)": IBEX_MAP,
     "Szwecja (OMX 30)": OMX_MAP,
     "Norwegia (OBX)": OBX_MAP,
-    # S&P 500 jest budowany dynamicznie w core/scanner.py (get_sp500_map),
-    # bo lista >500 tickerów zmienia się w czasie.
+    "Włochy (FTSE MIB)": FTSEMIB_MAP,
+    "Austria (ATX)": ATX_MAP,
+    "Portugalia (PSI)": PSI_MAP,
+    # S&P 500 i S&P 400 (MidCap) są pobierane dynamicznie w core/scanner.py
+    # (get_sp500_map / get_sp400_map), bo ich składy zmieniają się w czasie.
 }

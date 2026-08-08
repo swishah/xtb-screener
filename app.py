@@ -12,7 +12,7 @@ from config.markets import STOCK_GROUPS, ETF_MAP, VERIFIED_TICKERS  # noqa: E402
 from core import db  # noqa: E402
 from core.scanner import (  # noqa: E402
     analyze_ticker, compute_indicators, score_row, deep_value_score,
-    price_history_for_backtest, get_current_price,
+    price_history_for_backtest, get_current_price, get_sp500_map, get_sp400_map,
 )
 
 st.set_page_config(page_title="XTB Screener", layout="wide")
@@ -23,8 +23,17 @@ st.caption(
     "konkretnego instrumentu w platformie XTB przed transakcją."
 )
 
+
+@st.cache_data(ttl=24 * 3600)
+def _us_maps() -> tuple[dict, dict]:
+    return get_sp500_map(), get_sp400_map()
+
+
+sp500_map, sp400_map = _us_maps()
 ALL_NAMES = {t: n for g in STOCK_GROUPS.values() for t, n in g.items()}
 ALL_NAMES.update(ETF_MAP)
+ALL_NAMES.update(sp500_map)
+ALL_NAMES.update(sp400_map)
 
 tab_screen, tab_deep, tab_backtest = st.tabs(
     ["🔍 Screener", "💎 Deep Value (spadki od ATH)", "⏪ Backtest spółki"]

@@ -41,6 +41,22 @@ def get_sp500_map() -> dict[str, str]:
         return {"AAPL": "Apple Inc.", "MSFT": "Microsoft Corp."}
 
 
+def get_sp400_map() -> dict[str, str]:
+    """S&P 400 MidCap — szerszy rynek USA poza samym S&P 500 (spółki średniej wielkości)."""
+    url = "https://en.wikipedia.org/wiki/List_of_S%26P_400_companies"
+    headers = {"User-Agent": "Mozilla/5.0"}
+    try:
+        response = requests.get(url, headers=headers, timeout=15)
+        table = pd.read_html(io.StringIO(response.text))[0]
+        symbol_col = "Symbol" if "Symbol" in table.columns else "Ticker symbol"
+        name_col = "Security" if "Security" in table.columns else "Company"
+        table[symbol_col] = table[symbol_col].astype(str).str.replace(".", "-", regex=False)
+        return dict(zip(table[symbol_col], table[name_col]))
+    except Exception as e:  # noqa: BLE001
+        print(f"⚠️ Nie udało się pobrać S&P 400 z Wikipedii ({e}), pomijam tę grupę.")
+        return {}
+
+
 def run_monte_carlo(data: pd.DataFrame) -> tuple[float, float]:
     returns = data["Close"].pct_change().dropna()
     if len(returns) < 30:
@@ -186,6 +202,7 @@ def deep_value_score(ind: dict, fund: dict) -> int:
 _SUFFIX_MARKET = {
     ".WA": "Polska", ".DE": "Niemcy", ".PA": "Francja", ".AS": "Holandia (Euronext)",
     ".L": "UK", ".MC": "Hiszpania", ".ST": "Szwecja", ".OL": "Norwegia", ".SW": "Szwajcaria",
+    ".MI": "Włochy", ".VI": "Austria", ".LS": "Portugalia",
 }
 
 
