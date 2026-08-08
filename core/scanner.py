@@ -183,6 +183,20 @@ def deep_value_score(ind: dict, fund: dict) -> int:
     return pts
 
 
+_SUFFIX_MARKET = {
+    ".WA": "Polska", ".DE": "Niemcy", ".PA": "Francja", ".AS": "Holandia (Euronext)",
+    ".L": "UK", ".MC": "Hiszpania", ".ST": "Szwecja", ".OL": "Norwegia", ".SW": "Szwajcaria",
+}
+
+
+def infer_market(ticker: str) -> str:
+    """Rozpoznaje rynek/kraj po sufiksie tickera (fallback, gdy nie podano jawnie)."""
+    for suffix, market in _SUFFIX_MARKET.items():
+        if ticker.endswith(suffix):
+            return market
+    return "USA"
+
+
 def analyze_ticker(ticker: str, full_name: str, kind: str = "stock") -> dict | None:
     """Analizuje jeden ticker "na żywo" (dzisiejsze dane). Zwraca None, gdy brak danych."""
     tk = yf.Ticker(ticker)
@@ -234,7 +248,10 @@ def analyze_ticker(ticker: str, full_name: str, kind: str = "stock") -> dict | N
     return row
 
 
-def analyze_group(ticker_map: dict[str, str], kind: str = "stock", label: str = "") -> list[dict]:
+def analyze_group(
+    ticker_map: dict[str, str], kind: str = "stock", label: str = "",
+    market_override: str | None = None,
+) -> list[dict]:
     results, skipped = [], []
     for t, name in ticker_map.items():
         try:
@@ -242,6 +259,7 @@ def analyze_group(ticker_map: dict[str, str], kind: str = "stock", label: str = 
             if row is None:
                 skipped.append(t)
             else:
+                row["Rynek"] = market_override or infer_market(t)
                 results.append(row)
         except Exception as e:  # noqa: BLE001
             skipped.append(f"{t} ({type(e).__name__})")
