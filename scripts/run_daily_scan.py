@@ -25,9 +25,11 @@ def main() -> None:
 
     for label, ticker_map in groups.items():
         print(f"🔄 {label} ({len(ticker_map)} tickerów)...")
-        all_rows.extend(analyze_group(ticker_map, kind="stock", label=label))
+        all_rows.extend(analyze_group(ticker_map, kind="stock", label=label, market_override=label))
 
     print(f"🔄 ETF-y ({len(ETF_MAP)})...")
+    # bez market_override — ETF-y mają zróżnicowane giełdy notowania, więc
+    # kraj/rynek jest rozpoznawany po sufiksie tickera (patrz infer_market)
     all_rows.extend(analyze_group(ETF_MAP, kind="etf", label="ETF"))
 
     print(f"💾 Zapisuję migawkę {today}: {len(all_rows)} instrumentów.")
