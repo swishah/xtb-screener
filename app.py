@@ -61,20 +61,24 @@ with tab_screen:
 
         col1, col2, col3, col4 = st.columns(4)
         with col1:
-            kind_filter = st.multiselect("Typ", ["stock", "etf"], default=["stock", "etf"])
+            typ_options = ["Wszystkie"] + sorted(df["Typ"].dropna().unique().tolist())
+            kind_choice = st.selectbox("Typ", typ_options, index=0)
+
+        pool = df if kind_choice == "Wszystkie" else df[df["Typ"] == kind_choice]
+
         with col2:
-            market_options = sorted(df["Rynek"].dropna().unique().tolist())
-            market_filter = st.multiselect("Rynek / kraj", market_options, default=market_options)
+            market_options = ["Wszystkie"] + sorted(pool["Rynek"].dropna().unique().tolist())
+            market_choice = st.selectbox("Rynek / kraj", market_options, index=0)
         with col3:
             min_score = st.slider("Min. Buy Score", 0, 9, 0)
         with col4:
             max_ath = st.slider("Maks. % od ATH (np. -30 = co najmniej -30%)", -90, 0, 0)
 
-        filtered = df[
-            df["Typ"].isin(kind_filter)
-            & df["Rynek"].isin(market_filter)
-            & (df["Buy Score"] >= min_score)
-            & (df["pct_from_ath"] <= max_ath)
+        filtered = pool.copy()
+        if market_choice != "Wszystkie":
+            filtered = filtered[filtered["Rynek"] == market_choice]
+        filtered = filtered[
+            (filtered["Buy Score"] >= min_score) & (filtered["pct_from_ath"] <= max_ath)
         ].sort_values("Buy Score", ascending=False)
 
         st.dataframe(filtered, use_container_width=True, height=600)
