@@ -166,14 +166,14 @@ def score_row(price: float, ind: dict, fund: dict) -> int:
     return int(sum(1 for s in signals if s))
 
 
-def deep_value_score(ind: dict, fund: dict) -> int:
+def deep_value_score(row: dict) -> int:
     """
-    Dedykowany score pod strategię "duży spadek od ATH, ale biznes wciąż
-    zdrowy": karze spadek od ATH mocniej, ale wymaga potwierdzenia jakości
-    biznesu (ROE, marża, wzrost EPS, dług), żeby odsiać "spadające noże".
+    Strategia "Deep Value": duży spadek od ATH, ale biznes wciąż zdrowy.
+    Karze spadek od ATH mocniej, ale wymaga potwierdzenia jakości biznesu
+    (ROE, marża, wzrost EPS, dług), żeby odsiać "spadające noże".
     """
     pts = 0
-    ath = ind.get("pct_from_ath")
+    ath = row.get("pct_from_ath")
     if ath is not None:
         if ath < -50:
             pts += 3
@@ -181,22 +181,82 @@ def deep_value_score(ind: dict, fund: dict) -> int:
             pts += 2
         elif ath < -15:
             pts += 1
-    roe = fund.get("ROE (%)")
+    roe = row.get("ROE (%)")
     if isinstance(roe, (int, float)) and roe > 12:
         pts += 2
-    op_margin = fund.get("Marża Operac. (%)")
+    op_margin = row.get("Marża Operac. (%)")
     if isinstance(op_margin, (int, float)) and op_margin > 10:
         pts += 1
-    eps_growth = fund.get("Wzrost EPS (%)")
+    eps_growth = row.get("Wzrost EPS (%)")
     if isinstance(eps_growth, (int, float)) and eps_growth > 0:
         pts += 2
-    debt_eq = fund.get("Dług/Kapitał")
+    debt_eq = row.get("Dług/Kapitał")
     if isinstance(debt_eq, (int, float)) and debt_eq < 100:
         pts += 1
-    rsi = ind.get("RSI")
+    rsi = row.get("RSI")
     if rsi is not None and rsi < 40:
         pts += 1
     return pts
+
+
+def momentum_score(row: dict) -> int:
+    """
+    Strategia "Momentum": spółka w silnym, potwierdzonym trendzie wzrostowym
+    (cena nad wszystkimi średnimi, MACD byczy, rosnący wolumen, blisko ATH,
+    RSI w zdrowej strefie wzrostu — nie wykupiona powyżej 70).
+    """
+    pts = 0
+    price = row.get("Cena")
+    if isinstance(price, (int, float)):
+        for key in ("SMA20", "SMA50", "SMA100", "SMA200"):
+            sma = row.get(key)
+            if isinstance(sma, (int, float)) and price > sma:
+                pts += 1
+    if row.get("macd_bullish"):
+        pts += 1
+    rsi = row.get("RSI")
+    if isinstance(rsi, (int, float)) and 50 <= rsi <= 70:
+        pts += 1
+    v_rat = row.get("volume_ratio")
+    if isinstance(v_rat, (int, float)) and v_rat > 1.2:
+        pts += 1
+    ath = row.get("pct_from_ath")
+    if isinstance(ath, (int, float)) and ath > -10:
+        pts += 1
+    return pts
+
+
+def dividend_score(row: dict) -> int:
+    """
+    Strategia "Dywidendowa": solidna, rosnąca stopa dywidendy przy zdrowych
+    fundamentach i historii nieprzerwanych wypłat (3 lata z rzędu).
+    """
+    pts = 0
+    yld = row.get("Stopa Dyw. (%)")
+    if isinstance(yld, (int, float)):
+        if yld > 3:
+            pts += 1
+        if yld > 5:
+            pts += 1
+    pe = row.get("C/Z (P/E)")
+    if isinstance(pe, (int, float)) and 0 < pe < 20:
+        pts += 1
+    roe = row.get("ROE (%)")
+    if isinstance(roe, (int, float)) and roe > 10:
+        pts += 1
+    debt_eq = row.get("Dług/Kapitał")
+    if isinstance(debt_eq, (int, float)) and debt_eq < 100:
+        pts += 1
+    if row.get("Lata z dywidendą (3Y)", 0) >= 3:
+        pts += 2
+    return pts
+
+
+STRATEGIES = {
+    "Deep Value (spadki od ATH)": ("Score: Deep Value", deep_value_score),
+    "Momentum": ("Score: Momentum", momentum_score),
+    "Dywidendowa": ("Score: Dywidendowa", dividend_score),
+}
 
 
 _SUFFIX_MARKET = {
@@ -244,6 +304,7 @@ def analyze_ticker(ticker: str, full_name: str, kind: str = "stock") -> dict | N
 
     curr_y = datetime.now().year
     div_yield = "BRAK"
+    div_years_paid = 0
     if "Dividends" in df.columns:
         divs = df["Dividends"]
         if not divs.empty and divs.sum() > 0:
@@ -251,6 +312,9 @@ def analyze_ticker(ticker: str, full_name: str, kind: str = "stock") -> dict | N
             last_div = round(float(by_year.get(curr_y - 1, 0)), 2)
             if last_div > 0 and price > 0:
                 div_yield = round((last_div / price) * 100, 2)
+            div_years_paid = sum(
+                1 for y in (curr_y - 1, curr_y - 2, curr_y - 3) if by_year.get(y, 0) > 0
+            )
 
     ind = compute_indicators(df, price)
     if not ind:
@@ -258,10 +322,12 @@ def analyze_ticker(ticker: str, full_name: str, kind: str = "stock") -> dict | N
 
     row = {
         "Ticker": ticker, "Nazwa": full_name, "Typ": kind, "Cena": round(price, 2),
-        "Stopa Dyw. (%)": div_yield, **fund, **ind,
+        "Stopa Dyw. (%)": div_yield, "Lata z dywidendą (3Y)": div_years_paid,
+        **fund, **ind,
         "Buy Score": score_row(price, ind, fund),
-        "Deep Value Score": deep_value_score(ind, fund),
     }
+    for _, (score_col, score_fn) in STRATEGIES.items():
+        row[score_col] = score_fn(row)
     return row
 
 
