@@ -377,6 +377,57 @@ def get_next_earnings_date(ticker: str) -> str | None:
     return None
 
 
+def red_flags(row: dict) -> list[str]:
+    """
+    Automatyczne ostrzeżenia liczone na już zebranych danych spółki — szybka
+    kontrola jakości bez ręcznego przeglądania każdej kolumny osobno.
+    🔴 = poważne ostrzeżenie, 🟡 = warto sprawdzić dokładniej.
+    """
+    flags: list[str] = []
+
+    pm = row.get("Marża netto (%)")
+    if isinstance(pm, (int, float)) and pm < 0:
+        flags.append("🔴 Ujemna marża netto (spółka traci pieniądze)")
+
+    pe = row.get("C/Z (P/E)")
+    if isinstance(pe, (int, float)) and pe < 0:
+        flags.append("🔴 Ujemne C/Z (strata na akcję)")
+
+    debt = row.get("Dług/Kapitał")
+    if isinstance(debt, (int, float)) and debt > 150:
+        flags.append("🔴 Bardzo wysoki dług/kapitał (>150%)")
+
+    payout = row.get("Payout ratio (%)")
+    if isinstance(payout, (int, float)) and payout > 100:
+        flags.append("🔴 Payout ratio >100% (wypłaca więcej niż zarabia)")
+
+    price, sma200, sma50 = row.get("Cena"), row.get("SMA200"), row.get("SMA50")
+    if all(isinstance(v, (int, float)) for v in (price, sma200, sma50)) and price < sma200 and price < sma50:
+        flags.append("🔴 Cena poniżej SMA50 i SMA200 (silny trend spadkowy)")
+
+    rev_growth = row.get("Wzrost przychodów (%)")
+    if isinstance(rev_growth, (int, float)) and rev_growth < -5:
+        flags.append("🟡 Malejące przychody")
+
+    eps_growth = row.get("Wzrost EPS (%)")
+    if isinstance(eps_growth, (int, float)) and eps_growth < -10:
+        flags.append("🟡 Malejący zysk na akcję")
+
+    op_margin = row.get("Marża Operac. (%)")
+    if isinstance(op_margin, (int, float)) and op_margin < 5:
+        flags.append("🟡 Niska marża operacyjna (<5%)")
+
+    ath = row.get("pct_from_ath")
+    if isinstance(ath, (int, float)) and ath < -70:
+        flags.append("🟡 Ekstremalny spadek od ATH (>-70%) — sprawdź, czy to nie dystres")
+
+    rsi = row.get("RSI")
+    if isinstance(rsi, (int, float)) and rsi > 75:
+        flags.append("🟡 RSI mocno wykupiony (>75)")
+
+    return flags
+
+
 def analyze_ticker(ticker: str, full_name: str, kind: str = "stock") -> dict | None:
     """Analizuje jeden ticker "na żywo" (dzisiejsze dane). Zwraca None, gdy brak danych."""
     tk = yf.Ticker(ticker)
@@ -448,6 +499,10 @@ def analyze_ticker(ticker: str, full_name: str, kind: str = "stock") -> dict | N
     }
     for _, (score_col, score_fn) in STRATEGIES.items():
         row[score_col] = score_fn(row)
+
+    flags = red_flags(row)
+    row["Liczba flag"] = len(flags)
+    row["Czerwone flagi"] = "; ".join(flags) if flags else "Brak"
     return row
 
 
