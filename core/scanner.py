@@ -447,6 +447,8 @@ def analyze_ticker(ticker: str, full_name: str, kind: str = "stock") -> dict | N
         info = {}
 
     currency = info.get("currency") or infer_currency(ticker)
+    sector = info.get("sector") or "Nieznany"
+    industry = info.get("industry") or "Nieznana"
 
     fund = {
         "C/Z (P/E)": _safe_get(info, "trailingPE") or "BRAK",
@@ -493,6 +495,7 @@ def analyze_ticker(ticker: str, full_name: str, kind: str = "stock") -> dict | N
     row = {
         "Ticker": ticker, "Nazwa": full_name, "Typ": kind, "Cena": round(price, 2),
         "Waluta": currency, "Zmiana ceny (1Y%)": price_change_1y,
+        "Sektor": sector, "Branża": industry,
         "Stopa Dyw. (%)": div_yield, "Lata z dywidendą (3Y)": div_years_paid,
         **fund, **ind,
         "Buy Score": score_row(price, ind, fund),
