@@ -29,41 +29,102 @@ OMX_MAP = {"ABB.ST": "ABB", "ALFA.ST": "Alfa Laval", "ASSA-B.ST": "ASSA ABLOY", 
 OBX_MAP = {"EQNR.OL": "Equinor", "DNB.OL": "DNB Bank", "AKBP.OL": "Aker BP", "TEL.OL": "Telenor", "NHY.OL": "Norsk Hydro", "MOWI.OL": "Mowi", "YAR.OL": "Yara International", "ORK.OL": "Orkla", "SUBC.OL": "Subsea 7", "TOM.OL": "Tomra Systems", "STB.OL": "Storebrand", "SALM.OL": "SalMar", "GJFS.OL": "Gjensidige", "AKER.OL": "Aker", "SCHA.OL": "Schibsted A", "FRO.OL": "Frontline", "TGS.OL": "TGS", "BAKKA.OL": "Bakkafrost", "LSG.OL": "Lerøy Seafood", "KOG.OL": "Kongsberg Gruppen", "NOD.OL": "Nordic Semiconductor", "NEL.OL": "Nel", "VAR.OL": "Vår Energi", "MPCC.OL": "MPC Container Ships"}
 
 # ---------------------------------------------------------------------------
-# ETF-y — popularne UCITS ETF-y notowane na giełdach europejskich, typowo
-# oferowane przez brokerów z ofertą "akcje+ETF" pokroju XTB. Zweryfikuj
-# dostępność każdego w platformie przed poleganiem na nim.
+# ETF-y — rozszerzona lista UCITS ETF-ów notowanych na giełdach europejskich.
+# Im bardziej niszowa kategoria (tematyczne, sektorowe, obligacyjne), tym
+# WIĘKSZA szansa, że dokładny ticker/sufiks Yahoo Finance się nie zgadza —
+# silnik po prostu pominie taki wpis i zaloguje go jako pominięty, więc nic
+# się nie wysypie, ale po pierwszym skanie warto zerknąć w log i wyczyścić
+# nietrafione pozycje. Zweryfikuj też dostępność każdego w samej XTB.
 # ---------------------------------------------------------------------------
 ETF_MAP = {
+    # --- Szeroki rynek: świat / USA / Europa / EM (najwyższa pewność tickerów) ---
     "CSPX.L": "iShares Core S&P 500 UCITS ETF (Acc)",
     "SXR8.DE": "iShares Core S&P 500 UCITS ETF (DE, Acc)",
+    "VUAA.L": "Vanguard S&P 500 UCITS ETF (Acc)",
     "VUSA.L": "Vanguard S&P 500 UCITS ETF (Dist)",
+    "SPY5.L": "SPDR S&P 500 UCITS ETF",
+    "IUSA.AS": "iShares Core S&P 500 UCITS ETF (EUR)",
     "IWDA.AS": "iShares Core MSCI World UCITS ETF (Acc)",
     "EUNL.DE": "iShares Core MSCI World UCITS ETF (DE, Acc)",
+    "SWDA.L": "iShares Core MSCI World UCITS ETF (L)",
     "VWCE.DE": "Vanguard FTSE All-World UCITS ETF (Acc)",
-    "VFEM.L": "Vanguard FTSE Emerging Markets UCITS ETF",
-    "EIMI.L": "iShares Core MSCI EM IMI UCITS ETF (Acc)",
+    "VWRL.L": "Vanguard FTSE All-World UCITS ETF (Dist)",
     "XDWD.DE": "Xtrackers MSCI World UCITS ETF (Acc)",
-    "IUSN.DE": "iShares MSCI World Small Cap UCITS ETF",
-    "EXSA.DE": "iShares STOXX Europe 600 UCITS ETF",
-    "VEUR.L": "Vanguard FTSE Developed Europe UCITS ETF",
-    "XDEW.DE": "Xtrackers S&P 500 Equal Weight UCITS ETF",
-    "QDVE.DE": "iShares S&P 500 Information Technology Sector UCITS ETF",
-    "IUIT.L": "iShares S&P 500 Information Technology Sector UCITS ETF",
-    "IGLN.L": "iShares Physical Gold ETC",
-    "SGLN.L": "Invesco Physical Gold ETC",
-    "EQQQ.L": "Invesco EQQQ Nasdaq-100 UCITS ETF",
-    "XDNA.DE": "Xtrackers Nasdaq 100 UCITS ETF",
     "LCWD.L": "Lyxor Core MSCI World UCITS ETF",
     "SPPW.DE": "SPDR MSCI World UCITS ETF",
-    "SPY5.L": "SPDR S&P 500 UCITS ETF",
+    "SSAC.L": "iShares MSCI ACWI UCITS ETF (Acc)",
+    "VFEM.L": "Vanguard FTSE Emerging Markets UCITS ETF",
+    "EIMI.L": "iShares Core MSCI EM IMI UCITS ETF (Acc)",
+    "IEEM.L": "iShares MSCI EM UCITS ETF",
+    "XMME.DE": "Xtrackers MSCI Emerging Markets Swap UCITS ETF",
+    "IUSN.DE": "iShares MSCI World Small Cap UCITS ETF",
+    "WSML.L": "iShares MSCI World Small Cap UCITS ETF (L)",
+    "VJPN.L": "Vanguard FTSE Japan UCITS ETF",
+    "IJPN.L": "iShares Core MSCI Japan IMI UCITS ETF",
+    "VEUR.L": "Vanguard FTSE Developed Europe UCITS ETF",
+    "EXSA.DE": "iShares STOXX Europe 600 UCITS ETF",
     "ISF.L": "iShares Core FTSE 100 UCITS ETF",
     "DAXEX.DE": "iShares Core DAX UCITS ETF",
-    "CSNDX.SW": "iShares Nasdaq 100 UCITS ETF",
+    "CAC.PA": "Amundi CAC 40 UCITS ETF",
+
+    # --- USA: styl, waga równa, Nasdaq ---
+    "XDEW.DE": "Xtrackers S&P 500 Equal Weight UCITS ETF",
+    "EWSX.DE": "iShares S&P 500 Equal Weight UCITS ETF",
+    "XDNA.DE": "Xtrackers Nasdaq 100 UCITS ETF",
+    "EQQQ.L": "Invesco EQQQ Nasdaq-100 UCITS ETF",
+    "CNDX.L": "iShares Nasdaq 100 UCITS ETF",
+    "CSNDX.SW": "iShares Nasdaq 100 UCITS ETF (SW)",
+
+    # --- Sektory S&P 500 (iShares) ---
+    "QDVE.DE": "iShares S&P 500 Information Technology Sector UCITS ETF",
+    "IUIT.L": "iShares S&P 500 Information Technology Sector UCITS ETF (L)",
+    "IUHC.L": "iShares S&P 500 Health Care Sector UCITS ETF",
+    "IUFS.L": "iShares S&P 500 Financials Sector UCITS ETF",
+    "IUCM.L": "iShares S&P 500 Consumer Discretionary Sector UCITS ETF",
+    "IUES.L": "iShares S&P 500 Energy Sector UCITS ETF",
+    "IUUS.L": "iShares S&P 500 Utilities Sector UCITS ETF",
+
+    # --- Sektory MSCI World (Xtrackers) — niższa pewność dokładnego sufiksu ---
+    "XDWT.DE": "Xtrackers MSCI World Information Technology UCITS ETF",
+    "XDWH.DE": "Xtrackers MSCI World Health Care UCITS ETF",
+    "XDWF.DE": "Xtrackers MSCI World Financials UCITS ETF",
+    "XDWC.DE": "Xtrackers MSCI World Consumer Discretionary UCITS ETF",
+    "XDWS.DE": "Xtrackers MSCI World Consumer Staples UCITS ETF",
+    "XDWU.DE": "Xtrackers MSCI World Utilities UCITS ETF",
+    "XDWY.DE": "Xtrackers MSCI World Energy UCITS ETF",
+    "XDWM.DE": "Xtrackers MSCI World Materials UCITS ETF",
+    "XDWI.DE": "Xtrackers MSCI World Industrials UCITS ETF",
+
+    # --- Tematyczne / technologiczne (niższa pewność, sprawdź po skanie) ---
+    "SEMI.L": "iShares MSCI Global Semiconductors UCITS ETF",
+    "XAIX.DE": "Xtrackers Artificial Intelligence & Big Data UCITS ETF",
+    "RBOT.L": "iShares Automation & Robotics UCITS ETF",
+    "ECAR.L": "iShares Electric Vehicles and Driving Technology UCITS ETF",
+    "WCBR.L": "iShares Digital Security UCITS ETF",
+    "BKCH.L": "iShares Blockchain Technology UCITS ETF",
+
+    # --- Czysta energia / ESG ---
+    "INRG.L": "iShares Global Clean Energy UCITS ETF",
+
+    # --- Dywidendy / value ---
     "VHYL.L": "Vanguard FTSE All-World High Dividend Yield UCITS ETF",
     "TDIV.AS": "VanEck Morningstar Developed Markets Dividend Leaders ETF",
-    "IUSA.AS": "iShares Core S&P 500 UCITS ETF (EUR)",
-    "XAIX.DE": "Xtrackers Artificial Intelligence & Big Data UCITS ETF",
-    "SEMI.L": "iShares MSCI Global Semiconductors UCITS ETF",
+    "ZPRV.DE": "SPDR MSCI USA Small Cap Value Weighted UCITS ETF",
+
+    # --- Nieruchomości (REIT) ---
+    "IWDP.L": "iShares Developed Markets Property Yield UCITS ETF",
+    "IPRP.L": "iShares European Property Yield UCITS ETF",
+
+    # --- Metale szlachetne / surowce ---
+    "IGLN.L": "iShares Physical Gold ETC",
+    "SGLN.L": "Invesco Physical Gold ETC",
+    "PHAU.L": "WisdomTree Physical Gold",
+    "SSLN.L": "iShares Physical Silver ETC",
+    "ICOM.L": "iShares Diversified Commodity Swap UCITS ETF",
+
+    # --- Obligacje ---
+    "IEAG.L": "iShares Core Euro Aggregate Bond UCITS ETF",
+    "VAGF.L": "Vanguard Global Aggregate Bond UCITS ETF (EUR Hedged, Acc)",
 }
 
 # sWIG80 — pełny, aktualny skład (sierpień 2026).
