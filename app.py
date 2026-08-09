@@ -145,6 +145,43 @@ with tab_strategie:
             display_cols = [c for c in STRATEGY_COLUMNS[strategy_name] + [score_col] if c in ranked.columns]
             st.dataframe(ranked[display_cols], use_container_width=True, height=600)
 
+        st.divider()
+        st.subheader("🔗 Zbieżność strategii")
+        st.caption(
+            "Spółki, które jednocześnie znajdują się w czołówce więcej niż jednej "
+            "strategii naraz — silniejszy, wzajemnie potwierdzony sygnał niż wysoki "
+            "wynik w tylko jednej z nich."
+        )
+        stocks_df = df[df["Typ"] == "stock"].copy()
+        available = {name: col for name, (col, _) in STRATEGIES.items() if col in stocks_df.columns}
+
+        if len(available) < 2:
+            st.info(
+                "Ta migawka ma policzoną tylko jedną strategię — uruchom skan ponownie, "
+                "żeby zbieżność miała sens (potrzeba co najmniej dwóch strategii)."
+            )
+        else:
+            conv_top_n = st.slider("Próg: TOP N per strategia", 5, 50, 15, key="conv_top_n")
+            membership: dict[str, int] = {}
+            for name, col in available.items():
+                top_tickers = stocks_df.sort_values(col, ascending=False).head(conv_top_n)["Ticker"]
+                for t in top_tickers:
+                    membership[t] = membership.get(t, 0) + 1
+
+            conv_tickers = [t for t, cnt in membership.items() if cnt >= 2]
+            if not conv_tickers:
+                st.info("Przy tym progu TOP N żadna spółka nie pojawia się w więcej niż jednej strategii.")
+            else:
+                conv_df = stocks_df[stocks_df["Ticker"].isin(conv_tickers)].copy()
+                conv_df["Liczba strategii (w TOP N)"] = conv_df["Ticker"].map(membership)
+                score_cols = list(available.values())
+                show_cols = [c for c in ["Ticker", "Nazwa", "Rynek", "Cena"] + score_cols
+                             + ["Liczba strategii (w TOP N)"] if c in conv_df.columns]
+                conv_df = conv_df.sort_values(
+                    ["Liczba strategii (w TOP N)"] + score_cols, ascending=False
+                )
+                st.dataframe(conv_df[show_cols], use_container_width=True, height=400)
+
 # ---------------------------------------------------------------------------
 # TAB 3 — Globalny przegląd: kondycja całego rynku, niezależnie od strategii
 # ---------------------------------------------------------------------------
