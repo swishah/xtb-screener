@@ -252,10 +252,45 @@ def dividend_score(row: dict) -> int:
     return pts
 
 
+def dividend_opportunity_score(row: dict) -> int:
+    """
+    Strategia "Dywidenda-okazja": wysoka stopa dywidendy, przy czym cena w
+    ostatnim roku prawie się nie ruszyła (albo spadła) — rynek jeszcze nie
+    "przecenił w górę" tej okazji. Wymaga potwierdzenia, że dywidenda jest
+    bezpieczna (payout ratio) i biznes się nie kurczy (przychody, marża).
+    """
+    pts = 0
+    yld = row.get("Stopa Dyw. (%)")
+    if isinstance(yld, (int, float)):
+        if yld > 4:
+            pts += 1
+        if yld > 6:
+            pts += 1
+    chg = row.get("Zmiana ceny (1Y%)")
+    if isinstance(chg, (int, float)):
+        if chg < 10:
+            pts += 1
+        if chg < 0:
+            pts += 1
+    payout = row.get("Payout ratio (%)")
+    if isinstance(payout, (int, float)) and 0 < payout < 80:
+        pts += 2
+    rev_growth = row.get("Wzrost przychodów (%)")
+    if isinstance(rev_growth, (int, float)) and rev_growth > 0:
+        pts += 1
+    profit_margin = row.get("Marża netto (%)")
+    if isinstance(profit_margin, (int, float)) and profit_margin > 5:
+        pts += 1
+    if row.get("Lata z dywidendą (3Y)", 0) >= 3:
+        pts += 1
+    return pts
+
+
 STRATEGIES = {
     "Deep Value (spadki od ATH)": ("Score: Deep Value", deep_value_score),
     "Momentum": ("Score: Momentum", momentum_score),
     "Dywidendowa": ("Score: Dywidendowa", dividend_score),
+    "Dywidenda-okazja (cena jeszcze nie wzrosła)": ("Score: Dywidenda-Okazja", dividend_opportunity_score),
 }
 
 
@@ -272,6 +307,74 @@ def infer_market(ticker: str) -> str:
         if ticker.endswith(suffix):
             return market
     return "USA"
+
+
+_SUFFIX_CURRENCY = {
+    ".WA": "PLN", ".DE": "EUR", ".PA": "EUR", ".AS": "EUR", ".MC": "EUR",
+    ".LS": "EUR", ".MI": "EUR", ".VI": "EUR", ".L": "GBP", ".ST": "SEK",
+    ".OL": "NOK", ".SW": "CHF",
+}
+
+
+def infer_currency(ticker: str) -> str:
+    """Rozpoznaje walutę notowania po sufiksie tickera (fallback, gdy Yahoo nie poda jej w `info`)."""
+    for suffix, currency in _SUFFIX_CURRENCY.items():
+        if ticker.endswith(suffix):
+            return currency
+    return "USD"
+
+
+def get_fx_rates(currencies: set[str], target: str = "PLN") -> dict[str, float]:
+    """
+    Kursy walut do wspólnej waluty docelowej (domyślnie PLN), pobierane na
+    żywo z Yahoo Finance (pary XXXTARGET=X). Nie jest zapisywane w migawkach —
+    liczone na bieżąco w appce, żeby nie zwalniać codziennego skanu.
+    """
+    rates = {target: 1.0}
+    for cur in currencies:
+        if not cur or cur in (target, "BRAK"):
+            continue
+        try:
+            tk = yf.Ticker(f"{cur}{target}=X")
+            hist = tk.history(period="5d")
+            if not hist.empty:
+                rates[cur] = float(hist["Close"].dropna().iloc[-1])
+        except Exception:  # noqa: BLE001
+            continue
+    return rates
+
+
+def get_next_earnings_date(ticker: str) -> str | None:
+    """
+    Data najbliższej publikacji wyników finansowych. Próbuje dwóch metod
+    (yfinance zmieniał to API między wersjami) — zwraca None, gdy się nie uda,
+    zamiast wywalać cały widok.
+    """
+    tk = yf.Ticker(ticker)
+    try:
+        cal = tk.calendar
+        dates = None
+        if isinstance(cal, dict):
+            dates = cal.get("Earnings Date")
+        elif cal is not None and hasattr(cal, "loc") and "Earnings Date" in getattr(cal, "index", []):
+            dates = cal.loc["Earnings Date"].tolist()
+        if dates:
+            today = pd.Timestamp.now().normalize()
+            future = [pd.Timestamp(d) for d in dates if d and pd.Timestamp(d) >= today]
+            if future:
+                return min(future).date().isoformat()
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        edf = tk.get_earnings_dates(limit=8)
+        if edf is not None and not edf.empty:
+            now = pd.Timestamp.now(tz=edf.index.tz)
+            future = edf[edf.index >= now]
+            if not future.empty:
+                return future.index.min().date().isoformat()
+    except Exception:  # noqa: BLE001
+        pass
+    return None
 
 
 def analyze_ticker(ticker: str, full_name: str, kind: str = "stock") -> dict | None:
@@ -292,15 +395,31 @@ def analyze_ticker(ticker: str, full_name: str, kind: str = "stock") -> dict | N
     except Exception:  # noqa: BLE001
         info = {}
 
+    currency = info.get("currency") or infer_currency(ticker)
+
     fund = {
         "C/Z (P/E)": _safe_get(info, "trailingPE") or "BRAK",
         "Forward C/Z": _safe_get(info, "forwardPE") or "BRAK",
         "C/WK (P/B)": _safe_get(info, "priceToBook") or "BRAK",
         "ROE (%)": _safe_get(info, "returnOnEquity", is_pct=True) or "BRAK",
         "Marża Operac. (%)": _safe_get(info, "operatingMargins", is_pct=True) or "BRAK",
+        "Marża netto (%)": _safe_get(info, "profitMargins", is_pct=True) or "BRAK",
+        "Marża brutto (%)": _safe_get(info, "grossMargins", is_pct=True) or "BRAK",
         "Dług/Kapitał": _safe_get(info, "debtToEquity") or "BRAK",
         "Wzrost EPS (%)": _safe_get(info, "earningsGrowth", is_pct=True) or "BRAK",
+        "Wzrost przychodów (%)": _safe_get(info, "revenueGrowth", is_pct=True) or "BRAK",
+        "Payout ratio (%)": _safe_get(info, "payoutRatio", is_pct=True) or "BRAK",
     }
+
+    # Zmiana ceny w ostatnim roku — kluczowe dla strategii "wysoka dywidenda,
+    # cena jeszcze nie wzrosła": łapie spółki, których rynek jeszcze nie
+    # "przecenił w górę" mimo atrakcyjnej stopy dywidendy.
+    price_change_1y = None
+    if len(df) > 5:
+        idx_1y = -252 if len(df) > 252 else 0
+        price_1y_ago = float(df["Close"].iloc[idx_1y])
+        if price_1y_ago > 0:
+            price_change_1y = round(((price - price_1y_ago) / price_1y_ago) * 100, 1)
 
     curr_y = datetime.now().year
     div_yield = "BRAK"
@@ -322,6 +441,7 @@ def analyze_ticker(ticker: str, full_name: str, kind: str = "stock") -> dict | N
 
     row = {
         "Ticker": ticker, "Nazwa": full_name, "Typ": kind, "Cena": round(price, 2),
+        "Waluta": currency, "Zmiana ceny (1Y%)": price_change_1y,
         "Stopa Dyw. (%)": div_yield, "Lata z dywidendą (3Y)": div_years_paid,
         **fund, **ind,
         "Buy Score": score_row(price, ind, fund),
