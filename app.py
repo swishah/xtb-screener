@@ -13,7 +13,7 @@ from config.markets import STOCK_GROUPS, ETF_MAP, VERIFIED_TICKERS  # noqa: E402
 from core import db  # noqa: E402
 from core.scanner import (  # noqa: E402
     compute_indicators, price_history_for_backtest, get_sp500_map, get_sp400_map,
-    STRATEGIES, backtest_strategy,
+    STRATEGIES, backtest_strategy, get_fx_rates, get_next_earnings_date,
 )
 
 st.set_page_config(page_title="XTB Screener", layout="wide")
@@ -30,14 +30,24 @@ def _us_maps() -> tuple[dict, dict]:
     return get_sp500_map(), get_sp400_map()
 
 
+@st.cache_data(ttl=6 * 3600)
+def _fx_rates(currencies: tuple[str, ...]) -> dict[str, float]:
+    return get_fx_rates(set(currencies), target="PLN")
+
+
+@st.cache_data(ttl=6 * 3600)
+def _earnings_date(ticker: str) -> str | None:
+    return get_next_earnings_date(ticker)
+
+
 sp500_map, sp400_map = _us_maps()
 ALL_NAMES = {t: n for g in STOCK_GROUPS.values() for t, n in g.items()}
 ALL_NAMES.update(ETF_MAP)
 ALL_NAMES.update(sp500_map)
 ALL_NAMES.update(sp400_map)
 
-tab_screen, tab_strategie, tab_overview, tab_bt_strategy, tab_backtest = st.tabs(
-    ["🔍 Screener", "🧭 Strategie", "🌍 Globalny przegląd",
+tab_screen, tab_strategie, tab_overview, tab_dividends, tab_bt_strategy, tab_backtest = st.tabs(
+    ["🔍 Screener", "🧭 Strategie", "🌍 Globalny przegląd", "💰 Dywidendy",
      "📈 Backtest strategii", "⏪ Backtest spółki"]
 )
 
@@ -83,11 +93,60 @@ with tab_screen:
             (filtered["Buy Score"] >= min_score) & (filtered["pct_from_ath"] <= max_ath)
         ].sort_values("Buy Score", ascending=False)
 
+        if "Waluta" in filtered.columns:
+            currencies = tuple(sorted(filtered["Waluta"].dropna().unique().tolist()))
+            rates = _fx_rates(currencies)
+            filtered = filtered.copy()
+            filtered["Cena (PLN)"] = filtered.apply(
+                lambda r: round(r["Cena"] * rates[r["Waluta"]], 2)
+                if r.get("Waluta") in rates else None,
+                axis=1,
+            )
+            # przenieś "Cena (PLN)" zaraz obok "Cena", żeby łatwo je zestawić
+            cols = list(filtered.columns)
+            cols.remove("Cena (PLN)")
+            cols.insert(cols.index("Cena") + 1, "Cena (PLN)")
+            filtered = filtered[cols]
+            st.caption(
+                "Kursy walut pobierane na żywo (nie zapisywane w migawce) — 'Cena (PLN)' "
+                "ułatwia porównanie spółek notowanych w różnych walutach."
+            )
+
         st.dataframe(filtered, use_container_width=True, height=600)
         st.download_button(
             "⬇️ Pobierz CSV", filtered.to_csv(index=False).encode("utf-8"),
             file_name=f"screener_{chosen_date}.csv",
         )
+
+        st.divider()
+        st.subheader("📅 Najbliższe wyniki finansowe (earnings)")
+        st.caption(
+            "Sprawdzane na żądanie (nie podczas codziennego skanu, żeby go nie spowalniać) "
+            "— dla maks. 30 spółek z aktualnie przefiltrowanej tabeli powyżej."
+        )
+        if st.button("Sprawdź daty najbliższych wyników"):
+            sample = filtered[filtered["Typ"] == "stock"].head(30)
+            earnings_rows = []
+            with st.spinner("Pobieram kalendarz wyników z Yahoo Finance..."):
+                for _, r in sample.iterrows():
+                    ed = _earnings_date(r["Ticker"])
+                    if ed:
+                        days = (pd.Timestamp(ed) - pd.Timestamp.now().normalize()).days
+                        earnings_rows.append({
+                            "Ticker": r["Ticker"], "Nazwa": r["Nazwa"], "Rynek": r.get("Rynek"),
+                            "Najbliższe wyniki": ed, "Za ile dni": days,
+                        })
+            if earnings_rows:
+                edf = pd.DataFrame(earnings_rows).sort_values("Za ile dni")
+                st.dataframe(edf, use_container_width=True)
+                soon = edf[edf["Za ile dni"] <= 7]
+                if not soon.empty:
+                    st.warning(
+                        f"⚠️ {len(soon)} spółka/spółki mają wyniki w ciągu 7 dni — "
+                        "wyższa zmienność, inny kontekst decyzyjny."
+                    )
+            else:
+                st.info("Brak danych o najbliższych wynikach dla widocznych spółek (albo Yahoo ich nie udostępnia).")
 
 # ---------------------------------------------------------------------------
 # TAB 2 — Strategie: wymienne "obiektywy" patrzenia na te same dane
@@ -278,7 +337,74 @@ with tab_overview:
             st.info("Top ruchy pojawią się po drugiej migawce (potrzebne porównanie dzień do dnia).")
 
 # ---------------------------------------------------------------------------
-# TAB 4 — Backtest strategii: czy TOP N wg danego score'a faktycznie zarabia?
+# TAB 4 — Dywidendy: wysoka stopa dywidendy, cena jeszcze nie wzrosła
+# ---------------------------------------------------------------------------
+with tab_dividends:
+    st.write(
+        "Szuka spółek z wysoką stopą dywidendy (z ostatniego roku) względem ceny, "
+        "które **jeszcze nie zdrożały** — plus wskaźniki sprawdzające, czy sytuacja "
+        "biznesu się nie pogorszyła (przychody, marże, payout ratio), żeby odróżnić "
+        "realną okazję od 'pułapki dywidendowej' (wysoka stopa, bo cena spadła "
+        "z powodu problemów w firmie)."
+    )
+    dates = db.list_dates()
+    if not dates:
+        st.info("Brak danych — uruchom skan.")
+    else:
+        df = db.load_snapshot(dates[0])
+        if "Rynek" not in df.columns:
+            df["Rynek"] = "Nieznany"
+        stocks = df[df["Typ"] == "stock"].copy()
+
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            min_yield = st.slider("Min. stopa dywidendy (%)", 0.0, 15.0, 4.0, 0.5)
+        with c2:
+            max_price_change = st.slider(
+                "Maks. zmiana ceny w ostatnim roku (%)", -50, 100, 15,
+                help="Niżej = szukasz spółek, których cena jeszcze się nie ruszyła (albo spadła) mimo wysokiej dywidendy.",
+            )
+        with c3:
+            max_payout = st.slider(
+                "Maks. payout ratio (%)", 0, 200, 80,
+                help="Ile % zysku firma wypłaca jako dywidendę. Powyżej 100% oznacza, że wypłaca więcej niż zarabia — sygnał ostrzegawczy.",
+            )
+
+        candidates = stocks.copy()
+        if "Stopa Dyw. (%)" in candidates.columns:
+            candidates = candidates[pd.to_numeric(candidates["Stopa Dyw. (%)"], errors="coerce") >= min_yield]
+        if "Zmiana ceny (1Y%)" in candidates.columns:
+            candidates = candidates[
+                pd.to_numeric(candidates["Zmiana ceny (1Y%)"], errors="coerce") <= max_price_change
+            ]
+        if "Payout ratio (%)" in candidates.columns:
+            payout_num = pd.to_numeric(candidates["Payout ratio (%)"], errors="coerce")
+            candidates = candidates[(payout_num <= max_payout) | payout_num.isna()]
+
+        score_col = "Score: Dywidenda-Okazja"
+        sort_col = score_col if score_col in candidates.columns else "Stopa Dyw. (%)"
+        candidates = candidates.sort_values(sort_col, ascending=False)
+
+        st.caption(f"Znaleziono **{len(candidates)}** spółek spełniających kryteria.")
+
+        display_cols = [c for c in [
+            "Ticker", "Nazwa", "Rynek", "Cena", "Stopa Dyw. (%)", "Zmiana ceny (1Y%)",
+            "Lata z dywidendą (3Y)", "Payout ratio (%)", "C/Z (P/E)", "ROE (%)",
+            "Marża Operac. (%)", "Marża netto (%)", "Wzrost przychodów (%)",
+            "Wzrost EPS (%)", "Dług/Kapitał", score_col,
+        ] if c in candidates.columns]
+        st.dataframe(candidates[display_cols], use_container_width=True, height=600)
+        st.download_button(
+            "⬇️ Pobierz CSV", candidates[display_cols].to_csv(index=False).encode("utf-8"),
+            file_name=f"dywidendy_{dates[0]}.csv",
+        )
+        st.caption(
+            "Payout ratio i wzrost przychodów/marż pokazują, czy dywidenda jest bezpieczna. "
+            "'Zmiana ceny (1Y%)' blisko zera lub ujemna = rynek jeszcze nie 'przecenił w górę' tej spółki."
+        )
+
+# ---------------------------------------------------------------------------
+# TAB 5 — Backtest strategii: czy TOP N wg danego score'a faktycznie zarabia?
 # ---------------------------------------------------------------------------
 with tab_bt_strategy:
     st.write(
@@ -337,7 +463,7 @@ with tab_bt_strategy:
             st.dataframe(bt_result, use_container_width=True, height=400)
 
 # ---------------------------------------------------------------------------
-# TAB 5 — Backtest: jak wyglądała spółka X dni/tygodni/miesięcy temu
+# TAB 6 — Backtest: jak wyglądała spółka X dni/tygodni/miesięcy temu
 # ---------------------------------------------------------------------------
 with tab_backtest:
     ticker = st.selectbox("Spółka / ETF", sorted(ALL_NAMES.keys()),
