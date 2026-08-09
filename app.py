@@ -71,7 +71,7 @@ with tab_screen:
         if only_verified and VERIFIED_TICKERS:
             df = df[df["Ticker"].isin(VERIFIED_TICKERS)]
 
-        col1, col2, col3, col4 = st.columns(4)
+        col1, col2, col3, col4, col5 = st.columns(5)
         with col1:
             typ_options = ["Wszystkie"] + sorted(df["Typ"].dropna().unique().tolist())
             kind_choice = st.selectbox("Typ", typ_options, index=0)
@@ -85,13 +85,21 @@ with tab_screen:
             min_score = st.slider("Min. Buy Score", 0, 9, 0)
         with col4:
             max_ath = st.slider("Maks. % od ATH (np. -30 = co najmniej -30%)", -90, 0, 0)
+        with col5:
+            max_flags = st.slider(
+                "Maks. liczba czerwonych flag", 0, 10, 10,
+                help="0 = pokaż tylko spółki bez żadnych automatycznych ostrzeżeń.",
+            )
 
         filtered = pool.copy()
         if market_choice != "Wszystkie":
             filtered = filtered[filtered["Rynek"] == market_choice]
         filtered = filtered[
             (filtered["Buy Score"] >= min_score) & (filtered["pct_from_ath"] <= max_ath)
-        ].sort_values("Buy Score", ascending=False)
+        ]
+        if "Liczba flag" in filtered.columns:
+            filtered = filtered[filtered["Liczba flag"] <= max_flags]
+        filtered = filtered.sort_values("Buy Score", ascending=False)
 
         if "Waluta" in filtered.columns:
             currencies = tuple(sorted(filtered["Waluta"].dropna().unique().tolist()))
@@ -117,6 +125,19 @@ with tab_screen:
             "⬇️ Pobierz CSV", filtered.to_csv(index=False).encode("utf-8"),
             file_name=f"screener_{chosen_date}.csv",
         )
+
+        if "Czerwone flagi" in filtered.columns and not filtered.empty:
+            with st.expander("🚩 Zobacz treść czerwonych flag dla konkretnej spółki"):
+                flag_ticker = st.selectbox(
+                    "Spółka", filtered["Ticker"].tolist(),
+                    format_func=lambda t: f"{t} — {filtered.set_index('Ticker').loc[t, 'Nazwa']}",
+                )
+                flags_text = filtered.set_index("Ticker").loc[flag_ticker, "Czerwone flagi"]
+                if flags_text == "Brak":
+                    st.success("Brak automatycznych ostrzeżeń dla tej spółki.")
+                else:
+                    for f in flags_text.split("; "):
+                        st.write(f)
 
         st.divider()
         st.subheader("📅 Najbliższe wyniki finansowe (earnings)")
@@ -166,19 +187,28 @@ STRATEGY_DESCRIPTIONS = {
         "Premiuje solidną stopę dywidendy przy zdrowych fundamentach i "
         "historii nieprzerwanych wypłat przez ostatnie 3 lata."
     ),
+    "Dywidenda-okazja (cena jeszcze nie wzrosła)": (
+        "Wysoka stopa dywidendy przy cenie, która w ostatnim roku prawie się "
+        "nie ruszyła (albo spadła) — plus sprawdzone payout ratio i wzrost "
+        "przychodów, żeby odróżnić okazję od pułapki dywidendowej."
+    ),
 }
 STRATEGY_COLUMNS = {
     "Deep Value (spadki od ATH)": [
         "Ticker", "Nazwa", "Rynek", "Cena", "pct_from_ath", "ROE (%)",
-        "Marża Operac. (%)", "Wzrost EPS (%)", "Dług/Kapitał", "RSI",
+        "Marża Operac. (%)", "Wzrost EPS (%)", "Dług/Kapitał", "RSI", "Liczba flag",
     ],
     "Momentum": [
         "Ticker", "Nazwa", "Rynek", "Cena", "RSI", "volume_ratio",
-        "SMA20", "SMA50", "pct_from_ath",
+        "SMA20", "SMA50", "pct_from_ath", "Liczba flag",
     ],
     "Dywidendowa": [
         "Ticker", "Nazwa", "Rynek", "Cena", "Stopa Dyw. (%)",
-        "Lata z dywidendą (3Y)", "C/Z (P/E)", "ROE (%)", "Dług/Kapitał",
+        "Lata z dywidendą (3Y)", "C/Z (P/E)", "ROE (%)", "Dług/Kapitał", "Liczba flag",
+    ],
+    "Dywidenda-okazja (cena jeszcze nie wzrosła)": [
+        "Ticker", "Nazwa", "Rynek", "Cena", "Stopa Dyw. (%)", "Zmiana ceny (1Y%)",
+        "Payout ratio (%)", "Wzrost przychodów (%)", "Marża netto (%)", "Liczba flag",
     ],
 }
 
@@ -391,7 +421,7 @@ with tab_dividends:
             "Ticker", "Nazwa", "Rynek", "Cena", "Stopa Dyw. (%)", "Zmiana ceny (1Y%)",
             "Lata z dywidendą (3Y)", "Payout ratio (%)", "C/Z (P/E)", "ROE (%)",
             "Marża Operac. (%)", "Marża netto (%)", "Wzrost przychodów (%)",
-            "Wzrost EPS (%)", "Dług/Kapitał", score_col,
+            "Wzrost EPS (%)", "Dług/Kapitał", "Liczba flag", score_col,
         ] if c in candidates.columns]
         st.dataframe(candidates[display_cols], use_container_width=True, height=600)
         st.download_button(
