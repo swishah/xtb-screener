@@ -80,3 +80,22 @@ def load_ticker_history(ticker: str) -> pd.DataFrame:
         rec["scan_date"] = scan_date
         records.append(rec)
     return pd.DataFrame(records)
+
+
+def load_all_snapshots() -> pd.DataFrame:
+    """
+    Wszystkie migawki naraz, w jednej długiej tabeli (kolumna scan_date
+    identyfikuje dzień). Podstawa backtestu strategii — pozwala policzyć,
+    co by było, gdyby kupić TOP N wg danego score'a w dniu X i sprzedać
+    K migawek później.
+    """
+    import json
+    conn = get_conn()
+    rows = conn.execute("SELECT scan_date, payload FROM snapshots ORDER BY scan_date").fetchall()
+    conn.close()
+    records = []
+    for scan_date, payload in rows:
+        rec = json.loads(payload)
+        rec["scan_date"] = scan_date
+        records.append(rec)
+    return pd.DataFrame(records)
