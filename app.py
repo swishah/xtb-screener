@@ -12,7 +12,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from config.markets import STOCK_GROUPS, ETF_MAP, VERIFIED_TICKERS  # noqa: E402
 from core import db  # noqa: E402
 from core.scanner import (  # noqa: E402
-    compute_indicators, price_history_for_backtest, get_sp500_map, get_sp400_map, STRATEGIES,
+    compute_indicators, price_history_for_backtest, get_sp500_map, get_sp400_map,
+    STRATEGIES, backtest_strategy,
 )
 
 st.set_page_config(page_title="XTB Screener", layout="wide")
@@ -35,8 +36,9 @@ ALL_NAMES.update(ETF_MAP)
 ALL_NAMES.update(sp500_map)
 ALL_NAMES.update(sp400_map)
 
-tab_screen, tab_strategie, tab_overview, tab_backtest = st.tabs(
-    ["🔍 Screener", "🧭 Strategie", "🌍 Globalny przegląd", "⏪ Backtest spółki"]
+tab_screen, tab_strategie, tab_overview, tab_bt_strategy, tab_backtest = st.tabs(
+    ["🔍 Screener", "🧭 Strategie", "🌍 Globalny przegląd",
+     "📈 Backtest strategii", "⏪ Backtest spółki"]
 )
 
 # ---------------------------------------------------------------------------
@@ -239,7 +241,66 @@ with tab_overview:
             st.info("Top ruchy pojawią się po drugiej migawce (potrzebne porównanie dzień do dnia).")
 
 # ---------------------------------------------------------------------------
-# TAB 3 — Backtest: jak wyglądała spółka X dni/tygodni/miesięcy temu
+# TAB 4 — Backtest strategii: czy TOP N wg danego score'a faktycznie zarabia?
+# ---------------------------------------------------------------------------
+with tab_bt_strategy:
+    st.write(
+        "Sprawdza, co by było, gdyby co skan kupić TOP N spółek wg wybranej strategii "
+        "i sprzedać je po K kolejnych skanach. Liczone na bazie **zapisanych migawek** "
+        "(nie pełnej historii cen) — bo tylko migawki mają realny, historyczny scoring "
+        "fundamentalny. Im dłużej appka zbiera codzienne skany, tym wiarygodniejszy wynik."
+    )
+    dates_all = db.list_dates()
+    n_snapshots = len(dates_all)
+
+    if n_snapshots < 2:
+        st.info(
+            f"Masz na razie {n_snapshots} migawkę/migawki w bazie. Potrzeba co najmniej "
+            "kilku(nastu), żeby backtest miał sens — appka zbierze je automatycznie "
+            "wraz z kolejnymi uruchomieniami codziennego skanu."
+        )
+    else:
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            bt_strategy_name = st.selectbox("Strategia", list(STRATEGIES.keys()), key="bt_strategy")
+        with c2:
+            bt_top_n = st.slider("TOP N spółek", 1, 20, 5)
+        with c3:
+            max_hold = max(1, n_snapshots - 1)
+            bt_hold = st.slider("Trzymaj przez (liczba skanów)", 1, max_hold, min(5, max_hold))
+
+        score_col, _ = STRATEGIES[bt_strategy_name]
+        df_all = db.load_all_snapshots()
+        bt_result = backtest_strategy(df_all, score_col, top_n=bt_top_n, hold_snapshots=bt_hold)
+
+        if bt_result.empty:
+            st.warning(
+                "Za mało danych dla tej kombinacji parametrów — spróbuj mniejszej liczby "
+                "skanów do przetrzymania, albo poczekaj na kolejne migawki."
+            )
+        else:
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("Śr. zwrot na okno", f"{bt_result['Śr. zwrot %'].mean():.2f}%")
+            m2.metric("Win rate (średni)", f"{bt_result['Win rate %'].mean():.1f}%")
+            m3.metric("Liczba przetestowanych okien", len(bt_result))
+            best, worst = bt_result["Śr. zwrot %"].max(), bt_result["Śr. zwrot %"].min()
+            m4.metric("Najlepsze / najgorsze okno", f"{best:.1f}% / {worst:.1f}%")
+
+            st.caption(
+                "Krzywa kapitału zakłada mechaniczne reinwestowanie zwrotu z każdego okna "
+                "z rzędu — to uproszczenie (okna się nakładają w czasie), traktuj jako "
+                "orientacyjny obraz, nie realną symulację portfela."
+            )
+            equity = (1 + bt_result["Śr. zwrot %"] / 100).cumprod() - 1
+            equity_df = pd.DataFrame(
+                {"Skumulowany zwrot %": (equity * 100).round(2)}, index=bt_result["Data wyjścia"]
+            )
+            st.line_chart(equity_df)
+
+            st.dataframe(bt_result, use_container_width=True, height=400)
+
+# ---------------------------------------------------------------------------
+# TAB 5 — Backtest: jak wyglądała spółka X dni/tygodni/miesięcy temu
 # ---------------------------------------------------------------------------
 with tab_backtest:
     ticker = st.selectbox("Spółka / ETF", sorted(ALL_NAMES.keys()),
