@@ -71,29 +71,42 @@ with tab_screen:
         if only_verified and VERIFIED_TICKERS:
             df = df[df["Ticker"].isin(VERIFIED_TICKERS)]
 
-        col1, col2, col3, col4, col5 = st.columns(5)
-        with col1:
+        row1_col1, row1_col2, row1_col3 = st.columns(3)
+        with row1_col1:
             typ_options = ["Wszystkie"] + sorted(df["Typ"].dropna().unique().tolist())
             kind_choice = st.selectbox("Typ", typ_options, index=0)
 
         pool = df if kind_choice == "Wszystkie" else df[df["Typ"] == kind_choice]
 
-        with col2:
+        with row1_col2:
             market_options = ["Wszystkie"] + sorted(pool["Rynek"].dropna().unique().tolist())
             market_choice = st.selectbox("Rynek / kraj", market_options, index=0)
-        with col3:
+
+        pool2 = pool if market_choice == "Wszystkie" else pool[pool["Rynek"] == market_choice]
+
+        with row1_col3:
+            if "Sektor" in pool2.columns:
+                sector_options = ["Wszystkie"] + sorted(
+                    s for s in pool2["Sektor"].dropna().unique().tolist() if s != "Nieznany"
+                )
+                sector_choice = st.selectbox("Sektor", sector_options, index=0)
+            else:
+                sector_choice = "Wszystkie"
+
+        row2_col1, row2_col2, row2_col3 = st.columns(3)
+        with row2_col1:
             min_score = st.slider("Min. Buy Score", 0, 9, 0)
-        with col4:
+        with row2_col2:
             max_ath = st.slider("Maks. % od ATH (np. -30 = co najmniej -30%)", -90, 0, 0)
-        with col5:
+        with row2_col3:
             max_flags = st.slider(
                 "Maks. liczba czerwonych flag", 0, 10, 10,
                 help="0 = pokaż tylko spółki bez żadnych automatycznych ostrzeżeń.",
             )
 
-        filtered = pool.copy()
-        if market_choice != "Wszystkie":
-            filtered = filtered[filtered["Rynek"] == market_choice]
+        filtered = pool2.copy()
+        if sector_choice != "Wszystkie" and "Sektor" in filtered.columns:
+            filtered = filtered[filtered["Sektor"] == sector_choice]
         filtered = filtered[
             (filtered["Buy Score"] >= min_score) & (filtered["pct_from_ath"] <= max_ath)
         ]
@@ -308,26 +321,40 @@ with tab_overview:
             "Niski % przy rosnących indeksach = wzrost napędzany tylko kilkoma dużymi spółkami."
         )
 
-        st.subheader("Heatmapa rynków")
-        agg_cols = {}
-        if "Buy Score" in stocks.columns:
-            agg_cols["Śr. Buy Score"] = ("Buy Score", "mean")
-        if "pct_from_ath" in stocks.columns:
-            agg_cols["Śr. % od ATH"] = ("pct_from_ath", "mean")
-        agg_cols["Liczba spółek"] = ("Ticker", "count")
-        agg = stocks.groupby("Rynek").agg(**agg_cols).round(2)
-        if "Śr. Buy Score" in agg.columns:
-            agg = agg.sort_values("Śr. Buy Score", ascending=False)
-        try:
-            styled = agg.style
+        def _show_heatmap(group_col: str, title: str) -> None:
+            st.subheader(title)
+            if group_col not in stocks.columns:
+                st.info(f"Brak kolumny '{group_col}' w tej migawce.")
+                return
+            valid = stocks[stocks[group_col].notna() & (stocks[group_col] != "Nieznany")]
+            if valid.empty:
+                st.info("Brak danych do pokazania.")
+                return
+            agg_cols = {}
+            if "Buy Score" in valid.columns:
+                agg_cols["Śr. Buy Score"] = ("Buy Score", "mean")
+            if "pct_from_ath" in valid.columns:
+                agg_cols["Śr. % od ATH"] = ("pct_from_ath", "mean")
+            agg_cols["Liczba spółek"] = ("Ticker", "count")
+            agg = valid.groupby(group_col).agg(**agg_cols).round(2)
             if "Śr. Buy Score" in agg.columns:
-                styled = styled.background_gradient(cmap="RdYlGn", subset=["Śr. Buy Score"])
-            if "Śr. % od ATH" in agg.columns:
-                styled = styled.background_gradient(cmap="RdYlGn", subset=["Śr. % od ATH"])
-            st.dataframe(styled, use_container_width=True)
-        except ImportError:
-            # background_gradient wymaga matplotlib — jeśli go nie ma, pokaż zwykłą tabelę
-            st.dataframe(agg, use_container_width=True)
+                agg = agg.sort_values("Śr. Buy Score", ascending=False)
+            try:
+                styled = agg.style
+                if "Śr. Buy Score" in agg.columns:
+                    styled = styled.background_gradient(cmap="RdYlGn", subset=["Śr. Buy Score"])
+                if "Śr. % od ATH" in agg.columns:
+                    styled = styled.background_gradient(cmap="RdYlGn", subset=["Śr. % od ATH"])
+                st.dataframe(styled, use_container_width=True)
+            except ImportError:
+                # background_gradient wymaga matplotlib — jeśli go nie ma, pokaż zwykłą tabelę
+                st.dataframe(agg, use_container_width=True)
+
+        hm_col1, hm_col2 = st.columns(2)
+        with hm_col1:
+            _show_heatmap("Rynek", "Heatmapa rynków")
+        with hm_col2:
+            _show_heatmap("Sektor", "Heatmapa sektorów")
 
         st.subheader("Rozkład RSI (cały rynek)")
         if "RSI" in stocks.columns and not stocks["RSI"].dropna().empty:
