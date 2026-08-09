@@ -360,3 +360,39 @@ def price_history_for_backtest(ticker: str) -> pd.DataFrame:
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
     return df
+
+
+def backtest_strategy(df_all: pd.DataFrame, score_col: str, top_n: int, hold_snapshots: int) -> pd.DataFrame:
+    """
+    Backtest na bazie zapisanych migawek: dla każdego dnia skanu bierze TOP N
+    spółek wg score_col, sprawdza ich cenę `hold_snapshots` migawek później
+    (czyli "co by było, gdyby kupić dziś i sprzedać po K skanach") i liczy
+    średni zwrot oraz win rate dla tego okna. Zwraca jeden wiersz na okno.
+    """
+    if df_all.empty or score_col not in df_all.columns:
+        return pd.DataFrame()
+
+    stocks = df_all[df_all["Typ"] == "stock"]
+    dates = sorted(stocks["scan_date"].unique())
+    if len(dates) <= hold_snapshots:
+        return pd.DataFrame()
+
+    results = []
+    for i in range(len(dates) - hold_snapshots):
+        entry_date, exit_date = dates[i], dates[i + hold_snapshots]
+        entry_df = stocks[stocks["scan_date"] == entry_date].dropna(subset=[score_col])
+        if entry_df.empty:
+            continue
+        picks = entry_df.sort_values(score_col, ascending=False).head(top_n)
+        exit_prices = stocks[stocks["scan_date"] == exit_date][["Ticker", "Cena"]]
+        merged = picks.merge(exit_prices, on="Ticker", how="inner", suffixes=("", "_exit"))
+        if merged.empty:
+            continue
+        merged["Zwrot %"] = ((merged["Cena_exit"] - merged["Cena"]) / merged["Cena"]) * 100
+        results.append({
+            "Data wejścia": entry_date, "Data wyjścia": exit_date,
+            "Śr. zwrot %": round(float(merged["Zwrot %"].mean()), 2),
+            "Win rate %": round(float((merged["Zwrot %"] > 0).mean() * 100), 1),
+            "Liczba spółek": len(merged),
+        })
+    return pd.DataFrame(results)
