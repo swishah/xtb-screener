@@ -487,7 +487,11 @@ with tab_bt_strategy:
             bt_top_n = st.slider("TOP N spółek", 1, 20, 5)
         with c3:
             max_hold = max(1, n_snapshots - 1)
-            bt_hold = st.slider("Trzymaj przez (liczba skanów)", 1, max_hold, min(5, max_hold))
+            if max_hold < 2:
+                bt_hold = 1
+                st.caption("Trzymaj przez: 1 skan (za mało migawek na wybór zakresu)")
+            else:
+                bt_hold = st.slider("Trzymaj przez (liczba skanów)", 1, max_hold, min(5, max_hold))
 
         score_col, _ = STRATEGIES[bt_strategy_name]
         df_all = db.load_all_snapshots()
@@ -543,10 +547,11 @@ with tab_backtest:
             st.dataframe(hist[hist["scan_date"] == pick_date].T, use_container_width=True)
     else:
         df_price = price_history_for_backtest(ticker)
-        if df_price.empty:
-            st.info("Brak danych cenowych.")
+        max_back = min(500, len(df_price) - 30)
+        if df_price.empty or max_back < 1:
+            st.info("Za krótka historia cen dla tej spółki, żeby cofać się w czasie (potrzeba co najmniej ~30 dni notowań).")
         else:
-            back_days = st.slider("Cofnij się o (dni handlowych)", 0, min(500, len(df_price) - 30), 0)
+            back_days = st.slider("Cofnij się o (dni handlowych)", 0, max_back, 0)
             as_of = df_price.index[-1 - back_days]
             price_then = float(df_price.loc[:as_of, "Close"].iloc[-1])
             ind = compute_indicators(df_price, price_then, as_of=as_of)
