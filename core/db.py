@@ -30,6 +30,11 @@ CREATE TABLE IF NOT EXISTS watchlist (
     note TEXT,
     added_date TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS preferences (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
 """
 
 
@@ -140,3 +145,35 @@ def load_watchlist() -> pd.DataFrame:
     ).fetchall()
     conn.close()
     return pd.DataFrame(rows, columns=["Ticker", "Notatka", "Dodano"])
+
+
+def get_preference(key: str, default=None):
+    import json
+    conn = get_conn()
+    row = conn.execute("SELECT value FROM preferences WHERE key = ?", (key,)).fetchone()
+    conn.close()
+    if row is None:
+        return default
+    try:
+        return json.loads(row[0])
+    except Exception:  # noqa: BLE001
+        return default
+
+
+def set_preference(key: str, value) -> None:
+    import json
+    conn = get_conn()
+    with conn:
+        conn.execute(
+            "INSERT INTO preferences (key, value) VALUES (?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            (key, json.dumps(value)),
+        )
+    conn.close()
+
+
+def delete_preference(key: str) -> None:
+    conn = get_conn()
+    with conn:
+        conn.execute("DELETE FROM preferences WHERE key = ?", (key,))
+    conn.close()
