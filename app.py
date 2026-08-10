@@ -24,6 +24,155 @@ st.caption(
     "konkretnego instrumentu w platformie XTB przed transakcją."
 )
 
+# ---------------------------------------------------------------------------
+# Wskaźniki dostępne do wyboru w Screenerze — pogrupowane, z wyjaśnieniami
+# pokazywanymi jako dymek (hover) na nagłówku kolumny w tabeli.
+# ---------------------------------------------------------------------------
+INDICATOR_GROUPS: dict[str, list[str]] = {
+    "Podstawowe": ["Rynek", "Typ", "Sektor", "Branża", "Waluta", "Cena (PLN)", "Kapitalizacja (mld)"],
+    "Wycena": ["C/Z (P/E)", "Forward C/Z", "C/WK (P/B)"],
+    "Rentowność i wzrost": [
+        "ROE (%)", "Marża Operac. (%)", "Marża netto (%)", "Marża brutto (%)",
+        "Wzrost przychodów (%)", "Wzrost EPS (%)",
+    ],
+    "Zadłużenie i bezpieczeństwo": ["Dług/Kapitał", "Payout ratio (%)", "Liczba flag", "Czerwone flagi"],
+    "Dywidendy": ["Stopa Dyw. (%)", "Lata z dywidendą (3Y)", "Poprzednia dywidenda", "Przyszła dywidenda"],
+    "Technika": [
+        "RSI", "MACD", "SMA20", "SMA50", "SMA100", "SMA200", "bollinger_pct",
+        "volume_ratio", "smc", "pct_from_ath", "ATH", "ATL", "Zmiana ceny (1Y%)",
+    ],
+    "Prognozy analityków i ryzyko": [
+        "Beta", "52-tyg. maksimum", "52-tyg. minimum", "Cena docelowa (analitycy)",
+        "Rekomendacja analityków", "Liczba analityków", "% udziałów instytucji",
+    ],
+    "Scoring": [
+        "Buy Score", "Score: Deep Value", "Score: Momentum",
+        "Score: Dywidendowa", "Score: Dywidenda-Okazja",
+    ],
+}
+
+INDICATOR_HELP: dict[str, str] = {
+    "Rynek": "Giełda/kraj notowania spółki.",
+    "Typ": "Akcja (stock) czy fundusz notowany na giełdzie (etf).",
+    "Sektor": "Sektor gospodarki wg klasyfikacji Yahoo Finance (np. Technology, Financial Services).",
+    "Branża": "Węższa kategoria biznesu w ramach sektora (np. 'Software – Application').",
+    "Waluta": "Waluta notowania spółki na jej giełdzie macierzystej.",
+    "Cena (PLN)": "Cena przeliczona na złote wg bieżącego kursu — ułatwia porównania między rynkami.",
+    "Kapitalizacja (mld)": (
+        "Wartość rynkowa całej spółki (cena × liczba akcji), w mld jednostek waluty notowania. "
+        "Duża kapitalizacja (>10 mld) = zwykle stabilniejsza, wolniej rosnąca spółka; "
+        "mała (<2 mld) = większy potencjał wzrostu, ale i większe ryzyko."
+    ),
+    "C/Z (P/E)": (
+        "Cena do zysku na akcję — ile lat zysku 'kosztuje' spółka przy obecnej cenie. "
+        "Ogólnie <15 uznaje się za tanie, >25 za drogie. UWAGA: mocno zależy od sektora — "
+        "spółki technologiczne/wzrostowe zwykle mają wyższe C/Z (20-40+) uzasadnione szybkim "
+        "wzrostem, a banki/utilities/przemysł ciężki zwykle niższe (8-15). Porównuj w obrębie sektora."
+    ),
+    "Forward C/Z": (
+        "C/Z liczone na PROGNOZOWANYM zysku za najbliższy rok, nie historycznym — niższe niż "
+        "zwykłe C/Z sugeruje, że rynek oczekuje wzrostu zysków."
+    ),
+    "C/WK (P/B)": (
+        "Cena do wartości księgowej — ile płacisz za 1 jednostkę majątku netto spółki. <1 może "
+        "oznaczać niedowartościowanie (albo problemy), >3 typowe dla spółek z małym majątkiem "
+        "trwałym (np. software). Najbardziej użyteczne przy bankach i spółkach majątkowych."
+    ),
+    "ROE (%)": (
+        "Zwrot z kapitału własnego — jak efektywnie spółka pomnaża pieniądze akcjonariuszy. "
+        ">15% uznaje się za dobre, >20% za bardzo dobre. Banki i spółki technologiczne zwykle "
+        "mają wyższe ROE niż np. utilities czy przemysł ciężki."
+    ),
+    "Marża Operac. (%)": (
+        "Zysk operacyjny / przychody — rentowność podstawowej działalności. >15% dobre, >25% "
+        "bardzo dobre — ale np. handel detaliczny normalnie ma niskie marże (3-8%), a software wysokie (20-40%)."
+    ),
+    "Marża netto (%)": (
+        "Zysk netto / przychody — ile z każdej złotówki przychodu zostaje czystego zysku. "
+        "Ujemna = spółka traci pieniądze. Dobre wartości to zwykle 10-20%, zależnie od branży."
+    ),
+    "Marża brutto (%)": (
+        "Przychody minus koszt wytworzenia / przychody. Wysoka (>50%) typowa dla software/farmacji, "
+        "niska (10-25%) dla handlu/przemysłu — sama w sobie nie mówi, czy to dobrze czy źle."
+    ),
+    "Wzrost przychodów (%)": "Zmiana przychodów rok do roku. >10% to solidny wzrost, ujemny to sygnał ostrzegawczy.",
+    "Wzrost EPS (%)": (
+        "Zmiana zysku na akcję rok do roku — ważniejsza niż wzrost przychodów, bo pokazuje, "
+        "czy wzrost faktycznie przekłada się na zysk dla akcjonariusza."
+    ),
+    "Dług/Kapitał": (
+        "Zadłużenie względem kapitału własnego (%). <50% bezpiecznie, 50-150% umiarkowanie, "
+        ">150% wysokie ryzyko. Branże kapitałochłonne (utilities, telekomy, nieruchomości) "
+        "normalnie mają wyższy dług niż software."
+    ),
+    "Payout ratio (%)": (
+        "Jaki % zysku spółka wypłaca jako dywidendę. <60% zwykle bezpieczne, >100% oznacza "
+        "wypłacanie więcej niż się zarabia — sygnał ostrzegawczy."
+    ),
+    "Liczba flag": "Liczba automatycznych ostrzeżeń wykrytych w danych spółki. 0 = brak wykrytych problemów.",
+    "Czerwone flagi": "Konkretne powody ostrzeżeń — np. ujemna marża, wysoki dług, malejące przychody.",
+    "Stopa Dyw. (%)": (
+        ">4% uznaje się za wysoką stopę, ale bardzo wysoka (>8%) bywa sygnałem, że rynek "
+        "oczekuje cięcia dywidendy — zawsze sprawdź Payout ratio obok."
+    ),
+    "Lata z dywidendą (3Y)": "Ile z ostatnich 3 lat spółka wypłaciła dywidendę — 3 oznacza nieprzerwaną historię.",
+    "Poprzednia dywidenda": "Data ostatniej faktycznie wypłaconej dywidendy.",
+    "Przyszła dywidenda": "Najbliższa zapowiedziana data — BRAK, jeśli Yahoo nie ma potwierdzonej przyszłej daty (częste poza USA).",
+    "RSI": "Relative Strength Index (0-100). <30 = wyprzedanie (potencjalna okazja), >70 = wykupienie (ryzyko korekty).",
+    "MACD": "Różnica krótko- i długoterminowej średniej kroczącej — dodatnia i rosnąca sugeruje trend wzrostowy.",
+    "SMA20": "Średnia krocząca z 20 dni. Cena powyżej = krótkoterminowy trend wzrostowy.",
+    "SMA50": "Średnia krocząca z 50 dni — trend średnioterminowy.",
+    "SMA100": "Średnia krocząca z 100 dni.",
+    "SMA200": "Średnia krocząca z 200 dni — klasyczny wyznacznik długoterminowej hossy/bessy.",
+    "bollinger_pct": "Pozycja ceny we wstędze Bollingera (0 = dolna wstęga, 1 = górna). Blisko 0 = nisko względem niedawnej zmienności.",
+    "volume_ratio": "Dzisiejszy wolumen względem średniej z 20 dni. >1.3 = wyraźnie podwyższone zainteresowanie.",
+    "smc": "Prosty sygnał 'Smart Money Concept' — potencjalne wybicie z dołka poprzedzone zwiększonym wolumenem.",
+    "pct_from_ath": (
+        "% odległości ceny od historycznego maksimum. Duży spadek (<-30%) to podstawa strategii "
+        "Deep Value — ale sprawdź fundamenty, żeby odróżnić okazję od spółki w realnych problemach."
+    ),
+    "ATH": "Historyczne maksimum ceny w analizowanym okresie (do 10 lat).",
+    "ATL": "Historyczne minimum ceny w analizowanym okresie (do 10 lat).",
+    "Zmiana ceny (1Y%)": "Zmiana ceny w ciągu ostatniego roku — pomaga ocenić, czy rynek już 'zauważył' spółkę.",
+    "Beta": (
+        "Zmienność spółki względem szerokiego rynku. Beta=1 = podobna zmienność do rynku, "
+        ">1 = bardziej zmienna (większe wahania w obie strony), <1 = bardziej defensywna."
+    ),
+    "52-tyg. maksimum": "Najwyższa cena w ciągu ostatnich 12 miesięcy.",
+    "52-tyg. minimum": "Najniższa cena w ciągu ostatnich 12 miesięcy.",
+    "Cena docelowa (analitycy)": "Średnia cena docelowa wg analityków śledzących spółkę — konsensus rynkowy, nie gwarancja.",
+    "Rekomendacja analityków": "Skrócona rekomendacja konsensusu (Kupuj/Trzymaj/Sprzedaj).",
+    "Liczba analityków": "Ilu analityków wydało rekomendację — więcej zwykle oznacza bardziej wiarygodny konsensus.",
+    "% udziałów instytucji": "Jaki % akcji jest w rękach funduszy/inwestorów instytucjonalnych.",
+    "Buy Score": "Suma podstawowych sygnałów technicznych kupna (RSI, MACD, trend, wolumen, dystans od ATH).",
+    "Score: Deep Value": "Premiuje duży dystans od ATH przy zdrowych fundamentach (ROE, marża, wzrost EPS, dług).",
+    "Score: Momentum": "Premiuje spółki w silnym, potwierdzonym trendzie wzrostowym.",
+    "Score: Dywidendowa": "Premiuje solidną stopę dywidendy przy zdrowych fundamentach i nieprzerwanej historii wypłat.",
+    "Score: Dywidenda-Okazja": "Wysoka dywidenda przy cenie, która jeszcze się nie ruszyła, plus bezpieczny payout ratio.",
+}
+
+TEXT_COLUMNS = {
+    "Ticker", "Nazwa", "Rynek", "Typ", "Sektor", "Branża", "Waluta",
+    "Czerwone flagi", "Poprzednia dywidenda", "Przyszła dywidenda",
+    "smc", "Rekomendacja analityków",
+}
+
+DEFAULT_SCREENER_COLUMNS = [
+    "Rynek", "Sektor", "C/Z (P/E)", "ROE (%)", "Stopa Dyw. (%)",
+    "RSI", "pct_from_ath", "Buy Score", "Liczba flag",
+]
+
+
+def _column_config_for(columns: list[str]) -> dict:
+    config = {}
+    for col in columns:
+        help_text = INDICATOR_HELP.get(col, "")
+        if col in TEXT_COLUMNS:
+            config[col] = st.column_config.TextColumn(col, help=help_text)
+        else:
+            config[col] = st.column_config.NumberColumn(col, help=help_text)
+    return config
+
 
 @st.cache_data(ttl=24 * 3600)
 def _us_maps() -> tuple[dict, dict]:
@@ -46,9 +195,9 @@ ALL_NAMES.update(ETF_MAP)
 ALL_NAMES.update(sp500_map)
 ALL_NAMES.update(sp400_map)
 
-tab_screen, tab_strategie, tab_overview, tab_dividends, tab_custom, tab_bt_strategy, tab_backtest = st.tabs(
+tab_screen, tab_strategie, tab_overview, tab_dividends, tab_custom, tab_watchlist, tab_bt_strategy, tab_backtest = st.tabs(
     ["🔍 Screener", "🧭 Strategie", "🌍 Globalny przegląd", "💰 Dywidendy",
-     "🎛️ Własny scoring", "📈 Backtest strategii", "⏪ Backtest spółki"]
+     "🎛️ Własny scoring", "⭐ Watchlist", "📈 Backtest strategii", "⏪ Backtest spółki"]
 )
 
 # ---------------------------------------------------------------------------
@@ -66,6 +215,39 @@ with tab_screen:
         df = db.load_snapshot(chosen_date)
         if "Rynek" not in df.columns:
             df["Rynek"] = "Nieznany (stara migawka sprzed dodania filtra rynków)"
+
+        with st.expander("🎛️ Personalizuj widoczne wskaźniki", expanded=False):
+            st.caption(
+                "Wybierz, które wskaźniki chcesz widzieć w tabeli — Ticker i Nazwa "
+                "są zawsze pokazywane. Wybór zapisuje się jako domyślny na przycisk "
+                "poniżej i zostanie zapamiętany przy kolejnych wejściach na stronę "
+                "(dopóki appka nie zostanie zredeployowana)."
+            )
+            saved_cols = db.get_preference("screener_columns", DEFAULT_SCREENER_COLUMNS)
+            chosen_cols: list[str] = []
+            pick_col1, pick_col2 = st.columns(2)
+            for i, (group_name, group_cols) in enumerate(INDICATOR_GROUPS.items()):
+                available = [c for c in group_cols if c in df.columns]
+                target = pick_col1 if i % 2 == 0 else pick_col2
+                with target:
+                    picked = st.multiselect(
+                        group_name, available,
+                        default=[c for c in saved_cols if c in available],
+                        key=f"pick_{group_name}",
+                    )
+                    chosen_cols.extend(picked)
+
+            bsave, breset = st.columns(2)
+            with bsave:
+                if st.button("💾 Zapisz jako domyślne"):
+                    db.set_preference("screener_columns", chosen_cols)
+                    st.success("Zapisano — te wskaźniki będą domyślne przy kolejnych wejściach.")
+            with breset:
+                if st.button("↩️ Reset do domyślnych"):
+                    db.delete_preference("screener_columns")
+                    st.rerun()
+
+        active_columns = chosen_cols if chosen_cols else DEFAULT_SCREENER_COLUMNS
 
         only_verified = st.checkbox("Pokaż tylko tickery ręcznie zweryfikowane na XTB", value=False)
         if only_verified and VERIFIED_TICKERS:
@@ -133,7 +315,12 @@ with tab_screen:
                 "ułatwia porównanie spółek notowanych w różnych walutach."
             )
 
-        st.dataframe(filtered, use_container_width=True, height=600)
+        display_cols = ["Ticker", "Nazwa"] + [c for c in active_columns if c in filtered.columns and c not in ("Ticker", "Nazwa")]
+        display_df = filtered[display_cols]
+        st.dataframe(
+            display_df, use_container_width=True, height=600,
+            column_config=_column_config_for(display_cols),
+        )
         st.download_button(
             "⬇️ Pobierz CSV", filtered.to_csv(index=False).encode("utf-8"),
             file_name=f"screener_{chosen_date}.csv",
@@ -581,7 +768,78 @@ with tab_custom:
                         st.dataframe(cw_bt, use_container_width=True, height=300)
 
 # ---------------------------------------------------------------------------
-# TAB 6 — Backtest strategii: czy TOP N wg danego score'a faktycznie zarabia?
+# TAB 6 — Watchlist: oznaczone tickery z własnymi notatkami
+# ---------------------------------------------------------------------------
+with tab_watchlist:
+    st.write(
+        "Oznacz spółki jako obserwowane, z własną notatką (np. 'czekam na wyniki Q3'). "
+        "Zapisywane w bazie — przetrwa między sesjami i restartami appki."
+    )
+
+    st.subheader("Dodaj do watchlisty")
+    add_col1, add_col2, add_col3 = st.columns([2, 3, 1])
+    with add_col1:
+        new_ticker = st.selectbox(
+            "Spółka / ETF", sorted(ALL_NAMES.keys()),
+            format_func=lambda t: f"{t} — {ALL_NAMES[t]}", key="wl_add_ticker",
+        )
+    with add_col2:
+        new_note = st.text_input("Notatka (opcjonalnie)", key="wl_add_note")
+    with add_col3:
+        st.write("")
+        st.write("")
+        if st.button("➕ Dodaj"):
+            db.add_to_watchlist(new_ticker, new_note)
+            st.success(f"Dodano {new_ticker} do watchlisty.")
+            st.rerun()
+
+    st.divider()
+    st.subheader("Twoja watchlist")
+    wl = db.load_watchlist()
+
+    if wl.empty:
+        st.info("Watchlist jest pusta — dodaj pierwszą spółkę powyżej.")
+    else:
+        dates = db.list_dates()
+        if dates:
+            latest = db.load_snapshot(dates[0])
+            merge_cols = [c for c in [
+                "Ticker", "Nazwa", "Rynek", "Cena", "Buy Score", "Liczba flag", "pct_from_ath",
+            ] if c in latest.columns]
+            wl = wl.merge(latest[merge_cols], on="Ticker", how="left")
+            if wl["Nazwa"].isna().any():
+                st.caption(
+                    "Niektóre spółki nie mają jeszcze danych z najnowszej migawki "
+                    "(np. dodane po ostatnim skanie) — ceny/score pojawią się po kolejnym skanie."
+                )
+
+        edited = st.data_editor(
+            wl,
+            column_config={"Notatka": st.column_config.TextColumn("Notatka", width="large")},
+            disabled=[c for c in wl.columns if c != "Notatka"],
+            hide_index=True,
+            use_container_width=True,
+            key="wl_editor",
+        )
+
+        save_col, remove_col1, remove_col2 = st.columns([1, 2, 1])
+        with save_col:
+            if st.button("💾 Zapisz zmiany notatek"):
+                for _, r in edited.iterrows():
+                    db.update_watchlist_note(r["Ticker"], r["Notatka"] or "")
+                st.success("Zapisano zmiany notatek.")
+                st.rerun()
+        with remove_col1:
+            remove_ticker = st.selectbox("Usuń z watchlisty", wl["Ticker"].tolist(), key="wl_remove")
+        with remove_col2:
+            st.write("")
+            if st.button("🗑️ Usuń"):
+                db.remove_from_watchlist(remove_ticker)
+                st.success(f"Usunięto {remove_ticker}.")
+                st.rerun()
+
+# ---------------------------------------------------------------------------
+# TAB 7 — Backtest strategii: czy TOP N wg danego score'a faktycznie zarabia?
 # ---------------------------------------------------------------------------
 with tab_bt_strategy:
     st.write(
@@ -644,7 +902,7 @@ with tab_bt_strategy:
             st.dataframe(bt_result, use_container_width=True, height=400)
 
 # ---------------------------------------------------------------------------
-# TAB 7 — Backtest: jak wyglądała spółka X dni/tygodni/miesięcy temu
+# TAB 8 — Backtest: jak wyglądała spółka X dni/tygodni/miesięcy temu
 # ---------------------------------------------------------------------------
 with tab_backtest:
     ticker = st.selectbox("Spółka / ETF", sorted(ALL_NAMES.keys()),
