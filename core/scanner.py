@@ -428,6 +428,19 @@ def red_flags(row: dict) -> list[str]:
     return flags
 
 
+def _to_timestamp(val) -> pd.Timestamp | None:
+    """Bezpiecznie zamienia epoch (sekundy) albo string/datetime na pd.Timestamp."""
+    if val is None:
+        return None
+    try:
+        return pd.Timestamp(val, unit="s")
+    except Exception:  # noqa: BLE001
+        try:
+            return pd.Timestamp(val)
+        except Exception:  # noqa: BLE001
+            return None
+
+
 def analyze_ticker(ticker: str, full_name: str, kind: str = "stock") -> dict | None:
     """Analizuje jeden ticker "na żywo" (dzisiejsze dane). Zwraca None, gdy brak danych."""
     tk = yf.Ticker(ticker)
@@ -477,8 +490,12 @@ def analyze_ticker(ticker: str, full_name: str, kind: str = "stock") -> dict | N
     curr_y = datetime.now().year
     div_yield = "BRAK"
     div_years_paid = 0
+    last_div_date = "BRAK"
     if "Dividends" in df.columns:
         divs = df["Dividends"]
+        nonzero_divs = divs[divs > 0]
+        if not nonzero_divs.empty:
+            last_div_date = nonzero_divs.index.max().date().isoformat()
         if not divs.empty and divs.sum() > 0:
             by_year = divs.groupby(divs.index.year).sum()
             last_div = round(float(by_year.get(curr_y - 1, 0)), 2)
@@ -487,6 +504,17 @@ def analyze_ticker(ticker: str, full_name: str, kind: str = "stock") -> dict | N
             div_years_paid = sum(
                 1 for y in (curr_y - 1, curr_y - 2, curr_y - 3) if by_year.get(y, 0) > 0
             )
+
+    # Najbliższa (przyszła) dywidenda — Yahoo bywa niekonsekwentne: pola te
+    # czasem opisują OSTATNIĄ ex-dividend date, nie przyszłą, więc uznajemy
+    # datę za "przyszłą" tylko gdy faktycznie wypada od dziś wzwyż.
+    today = pd.Timestamp.now().normalize()
+    next_div_date = "BRAK"
+    for key in ("dividendDate", "exDividendDate"):
+        resolved = _to_timestamp(info.get(key))
+        if resolved is not None and resolved.normalize() >= today:
+            next_div_date = resolved.date().isoformat()
+            break
 
     ind = compute_indicators(df, price)
     if not ind:
@@ -497,6 +525,7 @@ def analyze_ticker(ticker: str, full_name: str, kind: str = "stock") -> dict | N
         "Waluta": currency, "Zmiana ceny (1Y%)": price_change_1y,
         "Sektor": sector, "Branża": industry,
         "Stopa Dyw. (%)": div_yield, "Lata z dywidendą (3Y)": div_years_paid,
+        "Poprzednia dywidenda": last_div_date, "Przyszła dywidenda": next_div_date,
         **fund, **ind,
         "Buy Score": score_row(price, ind, fund),
     }
