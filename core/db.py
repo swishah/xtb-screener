@@ -8,6 +8,7 @@ tego, że baza jest wersjonowana w git, a appka tylko ją czyta.
 from __future__ import annotations
 
 import sqlite3
+from datetime import date
 from pathlib import Path
 
 import pandas as pd
@@ -23,6 +24,12 @@ CREATE TABLE IF NOT EXISTS snapshots (
 );
 CREATE INDEX IF NOT EXISTS idx_snapshots_ticker ON snapshots(ticker);
 CREATE INDEX IF NOT EXISTS idx_snapshots_date ON snapshots(scan_date);
+
+CREATE TABLE IF NOT EXISTS watchlist (
+    ticker TEXT PRIMARY KEY,
+    note TEXT,
+    added_date TEXT NOT NULL
+);
 """
 
 
@@ -99,3 +106,37 @@ def load_all_snapshots() -> pd.DataFrame:
         rec["scan_date"] = scan_date
         records.append(rec)
     return pd.DataFrame(records)
+
+
+def add_to_watchlist(ticker: str, note: str = "") -> None:
+    conn = get_conn()
+    with conn:
+        conn.execute(
+            "INSERT INTO watchlist (ticker, note, added_date) VALUES (?, ?, ?) "
+            "ON CONFLICT(ticker) DO UPDATE SET note = excluded.note",
+            (ticker, note, date.today().isoformat()),
+        )
+    conn.close()
+
+
+def update_watchlist_note(ticker: str, note: str) -> None:
+    conn = get_conn()
+    with conn:
+        conn.execute("UPDATE watchlist SET note = ? WHERE ticker = ?", (note, ticker))
+    conn.close()
+
+
+def remove_from_watchlist(ticker: str) -> None:
+    conn = get_conn()
+    with conn:
+        conn.execute("DELETE FROM watchlist WHERE ticker = ?", (ticker,))
+    conn.close()
+
+
+def load_watchlist() -> pd.DataFrame:
+    conn = get_conn()
+    rows = conn.execute(
+        "SELECT ticker, note, added_date FROM watchlist ORDER BY added_date DESC"
+    ).fetchall()
+    conn.close()
+    return pd.DataFrame(rows, columns=["Ticker", "Notatka", "Dodano"])
