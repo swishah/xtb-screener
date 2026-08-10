@@ -477,6 +477,32 @@ def analyze_ticker(ticker: str, full_name: str, kind: str = "stock") -> dict | N
         "Payout ratio (%)": _safe_get(info, "payoutRatio", is_pct=True) or "BRAK",
     }
 
+    # Dodatkowe dane rynkowe — wszystkie za darmo z już pobranego `info`,
+    # bez dodatkowych zapytań do API.
+    market_cap = info.get("marketCap")
+    market_cap_b = round(market_cap / 1e9, 2) if isinstance(market_cap, (int, float)) else "BRAK"
+
+    _REC_MAP = {
+        "strong_buy": "Silne kupuj", "buy": "Kupuj", "hold": "Trzymaj",
+        "sell": "Sprzedaj", "strong_sell": "Silne sprzedaj", "none": "Brak",
+    }
+    rec_raw = info.get("recommendationKey")
+    recommendation = _REC_MAP.get(rec_raw, "BRAK")
+
+    analyst_count = info.get("numberOfAnalystOpinions")
+    analyst_count = int(analyst_count) if isinstance(analyst_count, (int, float)) else "BRAK"
+
+    extra_market_data = {
+        "Kapitalizacja (mld)": market_cap_b,
+        "Beta": _safe_get(info, "beta") or "BRAK",
+        "52-tyg. maksimum": _safe_get(info, "fiftyTwoWeekHigh") or "BRAK",
+        "52-tyg. minimum": _safe_get(info, "fiftyTwoWeekLow") or "BRAK",
+        "Cena docelowa (analitycy)": _safe_get(info, "targetMeanPrice") or "BRAK",
+        "Rekomendacja analityków": recommendation,
+        "Liczba analityków": analyst_count,
+        "% udziałów instytucji": _safe_get(info, "heldPercentInstitutions", is_pct=True) or "BRAK",
+    }
+
     # Zmiana ceny w ostatnim roku — kluczowe dla strategii "wysoka dywidenda,
     # cena jeszcze nie wzrosła": łapie spółki, których rynek jeszcze nie
     # "przecenił w górę" mimo atrakcyjnej stopy dywidendy.
@@ -526,7 +552,7 @@ def analyze_ticker(ticker: str, full_name: str, kind: str = "stock") -> dict | N
         "Sektor": sector, "Branża": industry,
         "Stopa Dyw. (%)": div_yield, "Lata z dywidendą (3Y)": div_years_paid,
         "Poprzednia dywidenda": last_div_date, "Przyszła dywidenda": next_div_date,
-        **fund, **ind,
+        **fund, **extra_market_data, **ind,
         "Buy Score": score_row(price, ind, fund),
     }
     for _, (score_col, score_fn) in STRATEGIES.items():
