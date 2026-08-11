@@ -13,7 +13,7 @@ from config.markets import STOCK_GROUPS, ETF_MAP, VERIFIED_TICKERS  # noqa: E402
 from core import db  # noqa: E402
 from core.scanner import (  # noqa: E402
     compute_indicators, price_history_for_backtest, get_sp500_map, get_sp400_map,
-    STRATEGIES, backtest_strategy, get_fx_rates, get_next_earnings_date,
+    STRATEGIES, backtest_strategy, get_fx_rates, get_next_earnings_date, get_ticker_news,
 )
 
 st.set_page_config(page_title="XTB Screener", layout="wide")
@@ -208,6 +208,11 @@ def _earnings_date(ticker: str) -> str | None:
     return get_next_earnings_date(ticker)
 
 
+@st.cache_data(ttl=2 * 3600)
+def _ticker_news(ticker: str) -> list[dict]:
+    return get_ticker_news(ticker)
+
+
 sp500_map, sp400_map = _us_maps()
 ALL_NAMES = {t: n for g in STOCK_GROUPS.values() for t, n in g.items()}
 ALL_NAMES.update(ETF_MAP)
@@ -237,7 +242,7 @@ with tab_screen:
 
         with st.expander("🎛️ Personalizuj widoczne wskaźniki", expanded=False):
             st.caption(
-                "Wybierz, które wskaźniki chcesz widzieć w tabeli — Ticker i Nazwa "
+                "Wybierz, które wskaźniki chcesz widzieć w tabeli — Ticker, Nazwa i Cena "
                 "są zawsze pokazywane. Wybór zapisuje się jako domyślny na przycisk "
                 "poniżej i zostanie zapamiętany przy kolejnych wejściach na stronę "
                 "(dopóki appka nie zostanie zredeployowana)."
@@ -334,7 +339,9 @@ with tab_screen:
                 "ułatwia porównanie spółek notowanych w różnych walutach."
             )
 
-        display_cols = ["Ticker", "Nazwa"] + [c for c in active_columns if c in filtered.columns and c not in ("Ticker", "Nazwa")]
+        display_cols = ["Ticker", "Nazwa", "Cena"] + [
+            c for c in active_columns if c in filtered.columns and c not in ("Ticker", "Nazwa", "Cena")
+        ]
         display_df = filtered[display_cols]
         st.dataframe(
             display_df, use_container_width=True, height=600,
@@ -1010,6 +1017,22 @@ with tab_bt_strategy:
 with tab_backtest:
     ticker = st.selectbox("Spółka / ETF", sorted(ALL_NAMES.keys()),
                            format_func=lambda t: f"{t} — {ALL_NAMES[t]}")
+
+    with st.expander("📰 Najnowsze newsy dla tej spółki"):
+        if st.button("Pobierz najnowsze nagłówki", key="news_btn"):
+            with st.spinner("Pobieram newsy z Yahoo Finance..."):
+                news_items = _ticker_news(ticker)
+            if not news_items:
+                st.info("Brak dostępnych newsów dla tej spółki (albo Yahoo ich nie udostępnia dla tego rynku).")
+            else:
+                for item in news_items:
+                    date_part = f" — {item['date']}" if item.get("date") else ""
+                    if item.get("link"):
+                        st.markdown(f"**[{item['title']}]({item['link']})**{date_part}")
+                    else:
+                        st.markdown(f"**{item['title']}**{date_part}")
+                    st.caption(item.get("publisher", "Nieznane źródło"))
+                    st.divider()
 
     mode = st.radio(
         "Źródło backtestu",
