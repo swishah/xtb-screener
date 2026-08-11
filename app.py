@@ -174,6 +174,25 @@ def _column_config_for(columns: list[str]) -> dict:
     return config
 
 
+# (kolumna, kierunek "higher"/"lower" = co jest lepiej) — używane do dynamicznego
+# porównania spółki z medianą JEJ WŁASNEGO sektora w bieżącej migawce.
+SECTOR_METRICS: list[tuple[str, str]] = [
+    ("C/Z (P/E)", "lower"),
+    ("Forward C/Z", "lower"),
+    ("C/WK (P/B)", "lower"),
+    ("ROE (%)", "higher"),
+    ("Marża Operac. (%)", "higher"),
+    ("Marża netto (%)", "higher"),
+    ("Marża brutto (%)", "higher"),
+    ("Dług/Kapitał", "lower"),
+    ("Wzrost przychodów (%)", "higher"),
+    ("Wzrost EPS (%)", "higher"),
+    ("Stopa Dyw. (%)", "higher"),
+    ("Payout ratio (%)", "lower"),
+    ("RSI", "lower"),
+]
+
+
 @st.cache_data(ttl=24 * 3600)
 def _us_maps() -> tuple[dict, dict]:
     return get_sp500_map(), get_sp400_map()
@@ -195,8 +214,8 @@ ALL_NAMES.update(ETF_MAP)
 ALL_NAMES.update(sp500_map)
 ALL_NAMES.update(sp400_map)
 
-tab_screen, tab_strategie, tab_overview, tab_dividends, tab_custom, tab_watchlist, tab_bt_strategy, tab_backtest = st.tabs(
-    ["🔍 Screener", "🧭 Strategie", "🌍 Globalny przegląd", "💰 Dywidendy",
+tab_screen, tab_strategie, tab_overview, tab_sector, tab_dividends, tab_custom, tab_watchlist, tab_bt_strategy, tab_backtest = st.tabs(
+    ["🔍 Screener", "🧭 Strategie", "🌍 Globalny przegląd", "📊 vs Sektor", "💰 Dywidendy",
      "🎛️ Własny scoring", "⭐ Watchlist", "📈 Backtest strategii", "⏪ Backtest spółki"]
 )
 
@@ -581,7 +600,91 @@ with tab_overview:
             st.info("Top ruchy pojawią się po drugiej migawce (potrzebne porównanie dzień do dnia).")
 
 # ---------------------------------------------------------------------------
-# TAB 4 — Dywidendy: wysoka stopa dywidendy, cena jeszcze nie wzrosła
+# TAB 4 — vs Sektor: dynamiczne porównanie spółki z medianą jej sektora
+# ---------------------------------------------------------------------------
+with tab_sector:
+    st.write(
+        "Sprawdza, jak konkretna spółka wypada na tle **mediany swojego sektora** "
+        "w bieżącej migawce — to jest porównanie liczone na żywo na aktualnych "
+        "danych (w przeciwieństwie do ogólnych progów w dymkach w Screenerze, "
+        "które są statyczne)."
+    )
+    dates = db.list_dates()
+    if not dates:
+        st.info("Brak danych — uruchom skan.")
+    else:
+        df = db.load_snapshot(dates[0])
+        stocks = df[df["Typ"] == "stock"].copy()
+
+        if "Sektor" not in stocks.columns:
+            st.info("Ta migawka nie ma jeszcze danych sektorowych — uruchom skan ponownie po aktualizacji kodu.")
+        else:
+            stocks = stocks[stocks["Sektor"].notna() & (stocks["Sektor"] != "Nieznany")]
+            if stocks.empty:
+                st.info("Brak spółek z rozpoznanym sektorem w tej migawce.")
+            else:
+                ticker_choice = st.selectbox(
+                    "Spółka", sorted(stocks["Ticker"].unique().tolist()),
+                    format_func=lambda t: f"{t} — {stocks.set_index('Ticker').loc[t, 'Nazwa']}",
+                    key="sector_ticker",
+                )
+                row = stocks[stocks["Ticker"] == ticker_choice].iloc[0]
+                sector = row["Sektor"]
+                peers = stocks[stocks["Sektor"] == sector]
+                st.caption(f"Sektor: **{sector}** — {len(peers)} spółek w tej migawce (w tym {ticker_choice})")
+
+                if len(peers) < 3:
+                    st.warning(
+                        "Za mało spółek w tym sektorze w bieżącej migawce, żeby mediana była "
+                        "wiarygodna (potrzeba co najmniej 3 — zwiększ uniwersum albo poczekaj "
+                        "na kolejne skany)."
+                    )
+
+                comp_rows = []
+                for col, direction in SECTOR_METRICS:
+                    if col not in peers.columns:
+                        continue
+                    numeric_peers = pd.to_numeric(peers[col], errors="coerce")
+                    median_val = numeric_peers.median()
+                    own_val = pd.to_numeric(pd.Series([row.get(col)]), errors="coerce").iloc[0]
+
+                    if pd.isna(own_val) or pd.isna(median_val):
+                        ocena, diff_txt = "brak danych", "—"
+                    else:
+                        diff_pct = ((own_val - median_val) / abs(median_val) * 100) if median_val != 0 else None
+                        better = (own_val > median_val) if direction == "higher" else (own_val < median_val)
+                        if diff_pct is not None and abs(diff_pct) < 5:
+                            ocena = "⚪ Podobnie do sektora"
+                        elif better:
+                            ocena = "🟢 Lepiej niż mediana"
+                        else:
+                            ocena = "🔴 Gorzej niż mediana"
+                        diff_txt = f"{diff_pct:+.1f}%" if diff_pct is not None else "—"
+
+                    comp_rows.append({
+                        "Wskaźnik": col,
+                        "Kierunek": "wyżej = lepiej" if direction == "higher" else "niżej = lepiej",
+                        ticker_choice: None if pd.isna(own_val) else round(float(own_val), 2),
+                        "Mediana sektora": None if pd.isna(median_val) else round(float(median_val), 2),
+                        "Różnica": diff_txt,
+                        "Ocena": ocena,
+                    })
+
+                st.dataframe(pd.DataFrame(comp_rows), use_container_width=True, height=480, hide_index=True)
+
+                st.divider()
+                st.subheader(f"Wszystkie spółki w sektorze „{sector}”")
+                sector_cols = [c for c in (
+                    ["Ticker", "Nazwa", "Rynek", "Cena", "Buy Score"] + [m for m, _ in SECTOR_METRICS]
+                ) if c in peers.columns]
+                st.dataframe(
+                    peers[sector_cols].sort_values("Buy Score", ascending=False),
+                    use_container_width=True, height=400,
+                    column_config=_column_config_for(sector_cols),
+                )
+
+# ---------------------------------------------------------------------------
+# TAB 5 — Dywidendy: wysoka stopa dywidendy, cena jeszcze nie wzrosła
 # ---------------------------------------------------------------------------
 with tab_dividends:
     st.write(
@@ -651,7 +754,7 @@ with tab_dividends:
         )
 
 # ---------------------------------------------------------------------------
-# TAB 5 — Własny scoring: kreator wag zamiast sztywnych strategii
+# TAB 6 — Własny scoring: kreator wag zamiast sztywnych strategii
 # ---------------------------------------------------------------------------
 # (label, kolumna, kierunek "higher"/"lower" = co jest lepsze, domyślna waga)
 CUSTOM_COMPONENTS = [
@@ -768,7 +871,7 @@ with tab_custom:
                         st.dataframe(cw_bt, use_container_width=True, height=300)
 
 # ---------------------------------------------------------------------------
-# TAB 6 — Watchlist: oznaczone tickery z własnymi notatkami
+# TAB 7 — Watchlist: oznaczone tickery z własnymi notatkami
 # ---------------------------------------------------------------------------
 with tab_watchlist:
     st.write(
@@ -839,7 +942,7 @@ with tab_watchlist:
                 st.rerun()
 
 # ---------------------------------------------------------------------------
-# TAB 7 — Backtest strategii: czy TOP N wg danego score'a faktycznie zarabia?
+# TAB 8 — Backtest strategii: czy TOP N wg danego score'a faktycznie zarabia?
 # ---------------------------------------------------------------------------
 with tab_bt_strategy:
     st.write(
@@ -902,7 +1005,7 @@ with tab_bt_strategy:
             st.dataframe(bt_result, use_container_width=True, height=400)
 
 # ---------------------------------------------------------------------------
-# TAB 8 — Backtest: jak wyglądała spółka X dni/tygodni/miesięcy temu
+# TAB 9 — Backtest: jak wyglądała spółka X dni/tygodni/miesięcy temu
 # ---------------------------------------------------------------------------
 with tab_backtest:
     ticker = st.selectbox("Spółka / ETF", sorted(ALL_NAMES.keys()),
