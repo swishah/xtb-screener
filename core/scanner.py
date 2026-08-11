@@ -595,6 +595,55 @@ def price_history_for_backtest(ticker: str) -> pd.DataFrame:
     return df
 
 
+def get_ticker_news(ticker: str, limit: int = 6) -> list[dict]:
+    """
+    Najświeższe nagłówki dla spółki z Yahoo Finance. Format odpowiedzi yfinance
+    zmieniał się między wersjami (płaskie pola vs zagnieżdżone pod "content"),
+    więc próbujemy obu wariantów. Zwraca listę słowników title/publisher/link/date
+    (posortowaną od najnowszych), albo pustą listę, gdy się nie uda.
+    """
+    try:
+        tk = yf.Ticker(ticker)
+        raw_news = tk.news or []
+    except Exception:  # noqa: BLE001
+        return []
+
+    results: list[dict] = []
+    for item in raw_news[:limit]:
+        content = item.get("content") if isinstance(item.get("content"), dict) else None
+        source = content or item
+
+        title = source.get("title")
+        if not title:
+            continue
+
+        publisher = None
+        provider = source.get("provider")
+        if isinstance(provider, dict):
+            publisher = provider.get("displayName")
+        publisher = publisher or item.get("publisher") or "Nieznane źródło"
+
+        link = None
+        canonical = source.get("canonicalUrl")
+        if isinstance(canonical, dict):
+            link = canonical.get("url")
+        link = link or item.get("link")
+
+        ts = source.get("pubDate") or item.get("providerPublishTime")
+        date_str = None
+        if ts:
+            try:
+                if isinstance(ts, (int, float)):
+                    date_str = pd.Timestamp(ts, unit="s").strftime("%Y-%m-%d %H:%M")
+                else:
+                    date_str = pd.Timestamp(ts).strftime("%Y-%m-%d %H:%M")
+            except Exception:  # noqa: BLE001
+                date_str = None
+
+        results.append({"title": title, "publisher": publisher, "link": link, "date": date_str})
+    return results
+
+
 def backtest_strategy(df_all: pd.DataFrame, score_col: str, top_n: int, hold_snapshots: int) -> pd.DataFrame:
     """
     Backtest na bazie zapisanych migawek: dla każdego dnia skanu bierze TOP N
