@@ -36,7 +36,10 @@ INDICATOR_GROUPS: dict[str, list[str]] = {
         "Wzrost przychodów (%)", "Wzrost EPS (%)",
     ],
     "Zadłużenie i bezpieczeństwo": ["Dług/Kapitał", "Payout ratio (%)", "Liczba flag", "Czerwone flagi"],
-    "Dywidendy": ["Stopa Dyw. (%)", "Lata z dywidendą (3Y)", "Poprzednia dywidenda", "Przyszła dywidenda"],
+    "Dywidendy": [
+        "Stopa Dyw. (%)", "Lata z dywidendą (3Y)", "Poprzednia dywidenda", "Przyszła dywidenda",
+        "Dyw. w poprzednim roku", "Dyw. w tym roku",
+    ],
     "Technika": [
         "RSI", "MACD", "SMA20", "SMA50", "SMA100", "SMA200", "bollinger_pct",
         "volume_ratio", "smc", "pct_from_ath", "ATH", "ATL", "Zmiana ceny (1Y%)",
@@ -118,6 +121,8 @@ INDICATOR_HELP: dict[str, str] = {
     "Lata z dywidendą (3Y)": "Ile z ostatnich 3 lat spółka wypłaciła dywidendę — 3 oznacza nieprzerwaną historię.",
     "Poprzednia dywidenda": "Data ostatniej faktycznie wypłaconej dywidendy.",
     "Przyszła dywidenda": "Najbliższa zapowiedziana data — BRAK, jeśli Yahoo nie ma potwierdzonej przyszłej daty (częste poza USA).",
+    "Dyw. w poprzednim roku": "Czy spółka wypłaciła dywidendę w POPRZEDNIM roku kalendarzowym.",
+    "Dyw. w tym roku": "Czy spółka wypłaciła już dywidendę w BIEŻĄCYM roku. 'Nie' + wypłata w zeszłym roku = wypłata jeszcze przed nią w tym roku.",
     "RSI": "Relative Strength Index (0-100). <30 = wyprzedanie (potencjalna okazja), >70 = wykupienie (ryzyko korekty).",
     "MACD": "Różnica krótko- i długoterminowej średniej kroczącej — dodatnia i rosnąca sugeruje trend wzrostowy.",
     "SMA20": "Średnia krocząca z 20 dni. Cena powyżej = krótkoterminowy trend wzrostowy.",
@@ -154,6 +159,7 @@ INDICATOR_HELP: dict[str, str] = {
 TEXT_COLUMNS = {
     "Ticker", "Nazwa", "Rynek", "Typ", "Sektor", "Branża", "Waluta",
     "Czerwone flagi", "Poprzednia dywidenda", "Przyszła dywidenda",
+    "Dyw. w poprzednim roku", "Dyw. w tym roku",
     "smc", "Rekomendacja analityków",
 }
 
@@ -454,10 +460,11 @@ STRATEGY_DESCRIPTIONS = {
         "Premiuje solidną stopę dywidendy przy zdrowych fundamentach i "
         "historii nieprzerwanych wypłat przez ostatnie 3 lata."
     ),
-    "Dywidenda-okazja (cena jeszcze nie wzrosła)": (
-        "Wysoka stopa dywidendy przy cenie, która w ostatnim roku prawie się "
-        "nie ruszyła (albo spadła) — plus sprawdzone payout ratio i wzrost "
-        "przychodów, żeby odróżnić okazję od pułapki dywidendowej."
+    "Dywidenda-okazja (sezon dywidendowy)": (
+        "Szuka spółek, które regularnie płacą dywidendę i zapłaciły w POPRZEDNIM "
+        "roku, ale JESZCZE NIE zapłaciły w bieżącym — wypłata jest więc dopiero "
+        "przed nimi ('sezon dywidendowy' wciąż w toku). Plus sprawdzone payout "
+        "ratio i wzrost przychodów, żeby odróżnić okazję od pułapki dywidendowej."
     ),
 }
 STRATEGY_COLUMNS = {
@@ -473,9 +480,11 @@ STRATEGY_COLUMNS = {
         "Ticker", "Nazwa", "Rynek", "Cena", "Stopa Dyw. (%)",
         "Lata z dywidendą (3Y)", "C/Z (P/E)", "ROE (%)", "Dług/Kapitał", "Liczba flag",
     ],
-    "Dywidenda-okazja (cena jeszcze nie wzrosła)": [
-        "Ticker", "Nazwa", "Rynek", "Cena", "Stopa Dyw. (%)", "Zmiana ceny (1Y%)",
-        "Payout ratio (%)", "Wzrost przychodów (%)", "Marża netto (%)", "Liczba flag",
+    "Dywidenda-okazja (sezon dywidendowy)": [
+        "Ticker", "Nazwa", "Rynek", "Cena", "Stopa Dyw. (%)",
+        "Dyw. w poprzednim roku", "Dyw. w tym roku", "Przyszła dywidenda",
+        "Zmiana ceny (1Y%)", "Payout ratio (%)", "Wzrost przychodów (%)",
+        "Marża netto (%)", "Liczba flag",
     ],
 }
 
@@ -765,6 +774,12 @@ def render_dividends():
                 help="Ile % zysku firma wypłaca jako dywidendę. Powyżej 100% oznacza, że wypłaca więcej niż zarabia — sygnał ostrzegawczy.",
             )
 
+        only_before_season = st.checkbox(
+            "🗓️ Pokaż tylko spółki PRZED sezonem dywidendowym "
+            "(płaciły w zeszłym roku, jeszcze nie zapłaciły w tym)",
+            value=False,
+        )
+
         candidates = stocks.copy()
         if "Stopa Dyw. (%)" in candidates.columns:
             candidates = candidates[pd.to_numeric(candidates["Stopa Dyw. (%)"], errors="coerce") >= min_yield]
@@ -775,6 +790,10 @@ def render_dividends():
         if "Payout ratio (%)" in candidates.columns:
             payout_num = pd.to_numeric(candidates["Payout ratio (%)"], errors="coerce")
             candidates = candidates[(payout_num <= max_payout) | payout_num.isna()]
+        if only_before_season and "Dyw. w poprzednim roku" in candidates.columns and "Dyw. w tym roku" in candidates.columns:
+            candidates = candidates[
+                (candidates["Dyw. w poprzednim roku"] == "Tak") & (candidates["Dyw. w tym roku"] == "Nie")
+            ]
 
         score_col = "Score: Dywidenda-Okazja"
         sort_col = score_col if score_col in candidates.columns else "Stopa Dyw. (%)"
@@ -783,8 +802,9 @@ def render_dividends():
         st.caption(f"Znaleziono **{len(candidates)}** spółek spełniających kryteria.")
 
         display_cols = [c for c in [
-            "Ticker", "Nazwa", "Rynek", "Cena", "Stopa Dyw. (%)", "Zmiana ceny (1Y%)",
-            "Poprzednia dywidenda", "Przyszła dywidenda", "Lata z dywidendą (3Y)",
+            "Ticker", "Nazwa", "Rynek", "Cena", "Stopa Dyw. (%)",
+            "Dyw. w poprzednim roku", "Dyw. w tym roku", "Poprzednia dywidenda", "Przyszła dywidenda",
+            "Zmiana ceny (1Y%)", "Lata z dywidendą (3Y)",
             "Payout ratio (%)", "C/Z (P/E)", "ROE (%)",
             "Marża Operac. (%)", "Marża netto (%)", "Wzrost przychodów (%)",
             "Wzrost EPS (%)", "Dług/Kapitał", "Liczba flag", score_col,
@@ -795,10 +815,10 @@ def render_dividends():
             file_name=f"dywidendy_{dates[0]}.csv",
         )
         st.caption(
-            "Payout ratio i wzrost przychodów/marż pokazują, czy dywidenda jest bezpieczna. "
-            "'Zmiana ceny (1Y%)' blisko zera lub ujemna = rynek jeszcze nie 'przecenił w górę' tej spółki. "
-            "'Przyszła dywidenda' pokazuje BRAK, jeśli Yahoo nie udostępnia potwierdzonej przyszłej daty "
-            "dla danej spółki (częste poza rynkiem USA)."
+            "'Dyw. w poprzednim roku' / 'Dyw. w tym roku' pokazują, czy spółka jest jeszcze "
+            "PRZED tegoroczną wypłatą (sedno tej strategii) czy już PO. Payout ratio i wzrost "
+            "przychodów/marż pokazują, czy dywidenda jest bezpieczna. 'Przyszła dywidenda' "
+            "pokazuje BRAK, jeśli Yahoo nie udostępnia potwierdzonej przyszłej daty (częste poza USA)."
         )
 
 # ---------------------------------------------------------------------------
