@@ -254,10 +254,13 @@ def dividend_score(row: dict) -> int:
 
 def dividend_opportunity_score(row: dict) -> int:
     """
-    Strategia "Dywidenda-okazja": wysoka stopa dywidendy, przy czym cena w
-    ostatnim roku prawie się nie ruszyła (albo spadła) — rynek jeszcze nie
-    "przecenił w górę" tej okazji. Wymaga potwierdzenia, że dywidenda jest
-    bezpieczna (payout ratio) i biznes się nie kurczy (przychody, marża).
+    Strategia "Dywidenda-okazja (sezon dywidendowy)": szuka spółek, które
+    regularnie płacą dywidendę, ZAPŁACIŁY w poprzednim roku, ale JESZCZE NIE
+    zapłaciły w bieżącym — czyli wypłata dopiero przed nimi. Przy niskiej
+    dotychczasowej zmianie ceny (rynek jeszcze "nie podbił" kursu przed
+    sezonem) i zdrowych fundamentach to typowa "tania spółka przed sezonem
+    dywidendowym". Wymaga potwierdzenia bezpieczeństwa (payout ratio,
+    przychody, marża), żeby odróżnić okazję od pułapki dywidendowej.
     """
     pts = 0
     yld = row.get("Stopa Dyw. (%)")
@@ -283,6 +286,14 @@ def dividend_opportunity_score(row: dict) -> int:
         pts += 1
     if row.get("Lata z dywidendą (3Y)", 0) >= 3:
         pts += 1
+
+    # Sezon dywidendowy: kluczowa część tej strategii.
+    if row.get("Dyw. w poprzednim roku") == "Tak":
+        pts += 1
+    if row.get("Dyw. w tym roku") == "Nie":
+        pts += 2  # wypłata jeszcze przed nami w tym roku — sedno strategii
+    if row.get("Przyszła dywidenda", "BRAK") != "BRAK":
+        pts += 1  # wiemy dokładnie, kiedy nastąpi wypłata
     return pts
 
 
@@ -290,7 +301,7 @@ STRATEGIES = {
     "Deep Value (spadki od ATH)": ("Score: Deep Value", deep_value_score),
     "Momentum": ("Score: Momentum", momentum_score),
     "Dywidendowa": ("Score: Dywidendowa", dividend_score),
-    "Dywidenda-okazja (cena jeszcze nie wzrosła)": ("Score: Dywidenda-Okazja", dividend_opportunity_score),
+    "Dywidenda-okazja (sezon dywidendowy)": ("Score: Dywidenda-Okazja", dividend_opportunity_score),
 }
 
 
@@ -517,6 +528,8 @@ def analyze_ticker(ticker: str, full_name: str, kind: str = "stock") -> dict | N
     div_yield = "BRAK"
     div_years_paid = 0
     last_div_date = "BRAK"
+    div_paid_prev_year = "Nie"
+    div_paid_this_year = "Nie"
     if "Dividends" in df.columns:
         divs = df["Dividends"]
         nonzero_divs = divs[divs > 0]
@@ -530,6 +543,8 @@ def analyze_ticker(ticker: str, full_name: str, kind: str = "stock") -> dict | N
             div_years_paid = sum(
                 1 for y in (curr_y - 1, curr_y - 2, curr_y - 3) if by_year.get(y, 0) > 0
             )
+            div_paid_prev_year = "Tak" if by_year.get(curr_y - 1, 0) > 0 else "Nie"
+            div_paid_this_year = "Tak" if by_year.get(curr_y, 0) > 0 else "Nie"
 
     # Najbliższa (przyszła) dywidenda — Yahoo bywa niekonsekwentne: pola te
     # czasem opisują OSTATNIĄ ex-dividend date, nie przyszłą, więc uznajemy
@@ -552,6 +567,7 @@ def analyze_ticker(ticker: str, full_name: str, kind: str = "stock") -> dict | N
         "Sektor": sector, "Branża": industry,
         "Stopa Dyw. (%)": div_yield, "Lata z dywidendą (3Y)": div_years_paid,
         "Poprzednia dywidenda": last_div_date, "Przyszła dywidenda": next_div_date,
+        "Dyw. w poprzednim roku": div_paid_prev_year, "Dyw. w tym roku": div_paid_this_year,
         **fund, **extra_market_data, **ind,
         "Buy Score": score_row(price, ind, fund),
     }
