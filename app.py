@@ -219,15 +219,56 @@ ALL_NAMES.update(ETF_MAP)
 ALL_NAMES.update(sp500_map)
 ALL_NAMES.update(sp400_map)
 
-tab_screen, tab_strategie, tab_overview, tab_sector, tab_dividends, tab_custom, tab_watchlist, tab_bt_strategy, tab_backtest = st.tabs(
-    ["🔍 Screener", "🧭 Strategie", "🌍 Globalny przegląd", "📊 vs Sektor", "💰 Dywidendy",
-     "🎛️ Własny scoring", "⭐ Watchlist", "📈 Backtest strategii", "⏪ Backtest spółki"]
-)
+# ---------------------------------------------------------------------------
+# Rejestr modułów (zakładek) — pozwala użytkownikowi wybrać, które moduły
+# w ogóle chce mieć widoczne. Funkcje render_* są zdefiniowane niżej w pliku;
+# same zakładki i wywołania budowane są dynamicznie na samym końcu skryptu.
+# ---------------------------------------------------------------------------
+MODULE_REGISTRY = [
+    ("screener", "🔍 Screener"),
+    ("strategie", "🧭 Strategie"),
+    ("overview", "🌍 Globalny przegląd"),
+    ("sector", "📊 vs Sektor"),
+    ("dividends", "💰 Dywidendy"),
+    ("custom", "🎛️ Własny scoring"),
+    ("watchlist", "⭐ Watchlist"),
+    ("bt_strategy", "📈 Backtest strategii"),
+    ("backtest", "⏪ Backtest spółki"),
+]
+ALL_MODULE_KEYS = [key for key, _ in MODULE_REGISTRY]
+
+with st.expander("🧩 Wybierz widoczne moduły (zakładki)", expanded=False):
+    st.caption(
+        "Odznacz moduły, których nie używasz — znikną z widoku appki. Wybór "
+        "zapisuje się jako domyślny i będzie pamiętany przy kolejnych wejściach "
+        "(dopóki appka nie zostanie zredeployowana)."
+    )
+    saved_modules = db.get_preference("visible_modules", ALL_MODULE_KEYS)
+    module_cols = st.columns(3)
+    selected_modules: list[str] = []
+    for i, (key, label) in enumerate(MODULE_REGISTRY):
+        with module_cols[i % 3]:
+            if st.checkbox(label, value=(key in saved_modules), key=f"mod_{key}"):
+                selected_modules.append(key)
+
+    mbsave, mbreset = st.columns(2)
+    with mbsave:
+        if st.button("💾 Zapisz jako domyślne", key="mod_save"):
+            db.set_preference("visible_modules", selected_modules)
+            st.success("Zapisano — te moduły będą domyślne przy kolejnych wejściach.")
+    with mbreset:
+        if st.button("↩️ Reset do wszystkich", key="mod_reset"):
+            db.delete_preference("visible_modules")
+            st.rerun()
+
+if not selected_modules:
+    st.warning("Odznaczono wszystkie moduły — zaznacz przynajmniej jeden powyżej, żeby coś zobaczyć.")
+    st.stop()
 
 # ---------------------------------------------------------------------------
 # TAB 1 — Screener na bazie ostatniej zapisanej migawki
 # ---------------------------------------------------------------------------
-with tab_screen:
+def render_screener():
     dates = db.list_dates()
     if not dates:
         st.warning(
@@ -438,7 +479,7 @@ STRATEGY_COLUMNS = {
     ],
 }
 
-with tab_strategie:
+def render_strategie():
     strategy_name = st.selectbox("Strategia", list(STRATEGIES.keys()))
     st.caption(STRATEGY_DESCRIPTIONS[strategy_name])
     score_col, _ = STRATEGIES[strategy_name]
@@ -500,7 +541,7 @@ with tab_strategie:
 # ---------------------------------------------------------------------------
 # TAB 3 — Globalny przegląd: kondycja całego rynku, niezależnie od strategii
 # ---------------------------------------------------------------------------
-with tab_overview:
+def render_overview():
     dates = db.list_dates()
     if not dates:
         st.info("Brak danych — uruchom skan.")
@@ -609,7 +650,7 @@ with tab_overview:
 # ---------------------------------------------------------------------------
 # TAB 4 — vs Sektor: dynamiczne porównanie spółki z medianą jej sektora
 # ---------------------------------------------------------------------------
-with tab_sector:
+def render_sector():
     st.write(
         "Sprawdza, jak konkretna spółka wypada na tle **mediany swojego sektora** "
         "w bieżącej migawce — to jest porównanie liczone na żywo na aktualnych "
@@ -693,7 +734,7 @@ with tab_sector:
 # ---------------------------------------------------------------------------
 # TAB 5 — Dywidendy: wysoka stopa dywidendy, cena jeszcze nie wzrosła
 # ---------------------------------------------------------------------------
-with tab_dividends:
+def render_dividends():
     st.write(
         "Szuka spółek z wysoką stopą dywidendy (z ostatniego roku) względem ceny, "
         "które **jeszcze nie zdrożały** — plus wskaźniki sprawdzające, czy sytuacja "
@@ -802,7 +843,7 @@ def _compute_custom_score(pool: pd.DataFrame, weights: dict[str, int]) -> pd.Ser
     return (score / total_weight * 100).round(1)
 
 
-with tab_custom:
+def render_custom():
     st.write(
         "Zamiast sztywnych strategii — ustaw własne wagi dla wskaźników, które są dla "
         "Ciebie ważne. 0 = pomiń wskaźnik całkowicie. Wynik liczony jest jako pozycja "
@@ -880,7 +921,7 @@ with tab_custom:
 # ---------------------------------------------------------------------------
 # TAB 7 — Watchlist: oznaczone tickery z własnymi notatkami
 # ---------------------------------------------------------------------------
-with tab_watchlist:
+def render_watchlist():
     st.write(
         "Oznacz spółki jako obserwowane, z własną notatką (np. 'czekam na wyniki Q3'). "
         "Zapisywane w bazie — przetrwa między sesjami i restartami appki."
@@ -951,7 +992,7 @@ with tab_watchlist:
 # ---------------------------------------------------------------------------
 # TAB 8 — Backtest strategii: czy TOP N wg danego score'a faktycznie zarabia?
 # ---------------------------------------------------------------------------
-with tab_bt_strategy:
+def render_bt_strategy():
     st.write(
         "Sprawdza, co by było, gdyby co skan kupić TOP N spółek wg wybranej strategii "
         "i sprzedać je po K kolejnych skanach. Liczone na bazie **zapisanych migawek** "
@@ -1014,7 +1055,7 @@ with tab_bt_strategy:
 # ---------------------------------------------------------------------------
 # TAB 9 — Backtest: jak wyglądała spółka X dni/tygodni/miesięcy temu
 # ---------------------------------------------------------------------------
-with tab_backtest:
+def render_backtest():
     ticker = st.selectbox("Spółka / ETF", sorted(ALL_NAMES.keys()),
                            format_func=lambda t: f"{t} — {ALL_NAMES[t]}")
 
@@ -1062,3 +1103,25 @@ with tab_backtest:
             st.write(f"Stan na: **{as_of.date()}**, cena: **{price_then:.2f}**")
             st.json(ind)
             st.line_chart(df_price.loc[:as_of, "Close"])
+
+# ---------------------------------------------------------------------------
+# Budowa zakładek na bazie wybranych modułów (patrz panel "Wybierz widoczne
+# moduły" na górze strony) i wywołanie odpowiednich funkcji render_*.
+# ---------------------------------------------------------------------------
+RENDER_FUNCS = {
+    "screener": render_screener,
+    "strategie": render_strategie,
+    "overview": render_overview,
+    "sector": render_sector,
+    "dividends": render_dividends,
+    "custom": render_custom,
+    "watchlist": render_watchlist,
+    "bt_strategy": render_bt_strategy,
+    "backtest": render_backtest,
+}
+
+active_modules = [(key, label) for key, label in MODULE_REGISTRY if key in selected_modules]
+streamlit_tabs = st.tabs([label for _, label in active_modules])
+for st_tab, (key, _label) in zip(streamlit_tabs, active_modules):
+    with st_tab:
+        RENDER_FUNCS[key]()
