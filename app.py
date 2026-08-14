@@ -24,6 +24,25 @@ st.caption(
     "konkretnego instrumentu w platformie XTB przed transakcją."
 )
 
+# Subtelna, bezpieczna animacja hover na przyciskach/kartach — celuje w klasę
+# .stButton, która jest stabilna w Streamlit od dawna, więc nie powinna się
+# łatwo wysypać przy aktualizacji frameworka.
+st.markdown(
+    """
+    <style>
+    div.stButton > button {
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+        border-radius: 12px;
+    }
+    div.stButton > button:hover {
+        transform: translateY(-3px) scale(1.02);
+        box-shadow: 0 6px 14px rgba(0,0,0,0.25);
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 # ---------------------------------------------------------------------------
 # Wskaźniki dostępne do wyboru w Screenerze — pogrupowane, z wyjaśnieniami
 # pokazywanymi jako dymek (hover) na nagłówku kolumny w tabeli.
@@ -52,6 +71,17 @@ INDICATOR_GROUPS: dict[str, list[str]] = {
         "Buy Score", "Score: Deep Value", "Score: Momentum",
         "Score: Dywidendowa", "Score: Dywidenda-Okazja",
     ],
+}
+
+GROUP_ICONS: dict[str, str] = {
+    "Podstawowe": "🏷️",
+    "Wycena": "💵",
+    "Rentowność i wzrost": "📈",
+    "Zadłużenie i bezpieczeństwo": "🛡️",
+    "Dywidendy": "💰",
+    "Technika": "📊",
+    "Prognozy analityków i ryzyko": "🔮",
+    "Scoring": "🏆",
 }
 
 INDICATOR_HELP: dict[str, str] = {
@@ -180,6 +210,223 @@ def _column_config_for(columns: list[str]) -> dict:
     return config
 
 
+def _personalize_columns(
+    pref_key: str,
+    available_columns: list[str],
+    default_columns: list[str],
+    mandatory_columns: list[str],
+    label: str = "Personalizuj widoczne wskaźniki",
+) -> list[str]:
+    """
+    Selektor kolumn: kafelki kategorii na górze (klik = pokazuje listę
+    wskaźników tej kategorii poniżej), zamiast wszystkich list naraz.
+    Zapis/reset per pref_key — każda tabela ma własny, niezależny wybór.
+    Zwraca finalną listę kolumn do wyświetlenia (mandatory_columns zawsze
+    pierwsze, bez duplikatów).
+    """
+    with st.expander(f"🎛️ {label}", expanded=False):
+        st.caption(
+            f"{', '.join(mandatory_columns)} zawsze widoczne. Wybór zapisuje się "
+            "jako domyślny i będzie pamiętany przy kolejnych wejściach "
+            "(dopóki appka nie zostanie zredeployowana)."
+        )
+        saved_cols = db.get_preference(pref_key, default_columns)
+
+        relevant_groups = [
+            (name, [c for c in cols if c in available_columns and c not in mandatory_columns])
+            for name, cols in INDICATOR_GROUPS.items()
+        ]
+        relevant_groups = [(name, cols) for name, cols in relevant_groups if cols]
+
+        active_state_key = f"active_group__{pref_key}"
+        if active_state_key not in st.session_state or st.session_state[active_state_key] not in dict(relevant_groups):
+            st.session_state[active_state_key] = relevant_groups[0][0] if relevant_groups else None
+
+        # inicjalizacja stanu każdej grupy (raz), żeby wartości przetrwały
+        # przełączanie kafelków, nawet dla grup jeszcze nieotwartych
+        for group_name, group_cols in relevant_groups:
+            state_key = f"pick_{pref_key}_{group_name}"
+            if state_key not in st.session_state:
+                st.session_state[state_key] = [c for c in saved_cols if c in group_cols]
+
+        if relevant_groups:
+            st.caption("Wybierz kategorię, żeby zobaczyć jej wskaźniki:")
+            tile_cols = st.columns(len(relevant_groups))
+            for i, (group_name, group_cols) in enumerate(relevant_groups):
+                with tile_cols[i]:
+                    n_selected = len(st.session_state[f"pick_{pref_key}_{group_name}"])
+                    is_active = st.session_state[active_state_key] == group_name
+                    icon = GROUP_ICONS.get(group_name, "📁")
+                    tile_label = f"{icon} {group_name}" + (f" ({n_selected})" if n_selected else "")
+                    if st.button(
+                        tile_label, key=f"tile_{pref_key}_{group_name}", use_container_width=True,
+                        type="primary" if is_active else "secondary",
+                    ):
+                        st.session_state[active_state_key] = group_name
+                        st.rerun()
+
+            active_group = st.session_state[active_state_key]
+            active_cols = dict(relevant_groups)[active_group]
+            st.multiselect(
+                f"Wskaźniki — {active_group}", active_cols,
+                key=f"pick_{pref_key}_{active_group}",
+            )
+
+        chosen_cols: list[str] = []
+        for group_name, _ in relevant_groups:
+            chosen_cols.extend(st.session_state[f"pick_{pref_key}_{group_name}"])
+
+        bsave, breset = st.columns(2)
+        with bsave:
+            if st.button("💾 Zapisz jako domyślne", key=f"save_{pref_key}"):
+                db.set_preference(pref_key, chosen_cols)
+                st.success("Zapisano.")
+        with breset:
+            if st.button("↩️ Reset do domyślnych", key=f"reset_{pref_key}"):
+                db.delete_preference(pref_key)
+                for group_name, _ in relevant_groups:
+                    st.session_state.pop(f"pick_{pref_key}_{group_name}", None)
+                st.session_state.pop(active_state_key, None)
+                st.rerun()
+
+    active = chosen_cols if chosen_cols else default_columns
+    return list(mandatory_columns) + [
+        c for c in active if c in available_columns and c not in mandatory_columns
+    ]
+
+
+# ---------------------------------------------------------------------------
+# Kolorowanie tabel — wspólne dla całej appki. Każda funkcja jest owinięta
+# w try/except per kolumna, więc nietypowe dane (np. "BRAK" wymieszane z
+# liczbami) nigdy nie wywalają całej tabeli — w najgorszym razie ta jedna
+# kolumna po prostu zostaje bez koloru.
+# ---------------------------------------------------------------------------
+GREEN_HIGHER_BETTER = [
+    "Buy Score", "Score: Deep Value", "Score: Momentum", "Score: Dywidendowa",
+    "Score: Dywidenda-Okazja", "Własny wynik", "ROE (%)", "Marża Operac. (%)",
+    "Marża netto (%)", "Marża brutto (%)", "Wzrost przychodów (%)", "Wzrost EPS (%)",
+    "Stopa Dyw. (%)", "Win rate %", "Deep Value Score", "Liczba strategii (w TOP N)",
+]
+RED_HIGHER_WORSE = ["Dług/Kapitał", "Liczba flag", "Payout ratio (%)", "C/Z (P/E)"]
+DIVERGING_ZERO_CENTERED = [
+    "Zmiana ceny (1Y%)", "Zmiana %", "pct_from_ath", "Śr. zwrot %", "Skumulowany zwrot %",
+]
+
+
+def _rsi_cell_style(v) -> str:
+    try:
+        v = float(v)
+    except (TypeError, ValueError):
+        return ""
+    if v < 30:
+        return "background-color: #1b5e20; color: white"
+    if v > 70:
+        return "background-color: #7f0000; color: white"
+    return ""
+
+
+def _numeric_gradient_style(series: pd.Series, cmap: str, center: float | None = None) -> list[str]:
+    """
+    Liczy kolor tła komórki na bazie wartości liczbowej w kolumnie — sam
+    konwertuje na liczby (errors='coerce'), więc nienumeryczne wartości typu
+    'BRAK' po prostu zostają bez koloru zamiast wywalać całą tabelę (co robi
+    wbudowany pandas .background_gradient() przy mieszanych typach danych).
+    """
+    try:
+        import matplotlib.cm as cm
+        import matplotlib.colors as mcolors
+    except Exception:  # noqa: BLE001
+        return ["" for _ in series]
+
+    numeric = pd.to_numeric(series, errors="coerce")
+    valid = numeric.dropna()
+    if valid.empty:
+        return ["" for _ in series]
+    lo, hi = float(valid.min()), float(valid.max())
+    if lo == hi:
+        return ["" for _ in series]
+
+    try:
+        if center is not None:
+            max_abs = max(abs(lo - center), abs(hi - center)) or 1.0
+            norm = mcolors.TwoSlopeNorm(vmin=center - max_abs, vcenter=center, vmax=center + max_abs)
+        else:
+            norm = mcolors.Normalize(vmin=lo, vmax=hi)
+        try:
+            import matplotlib
+            colormap = matplotlib.colormaps[cmap]
+        except Exception:  # noqa: BLE001
+            colormap = cm.get_cmap(cmap)
+    except Exception:  # noqa: BLE001
+        return ["" for _ in series]
+
+    styles = []
+    for v in numeric:
+        if pd.isna(v):
+            styles.append("")
+            continue
+        try:
+            r, g, b, _ = colormap(norm(float(v)))
+            luminance = 0.299 * r + 0.587 * g + 0.114 * b
+            text_color = "white" if luminance < 0.6 else "black"
+            styles.append(f"background-color: rgba({int(r * 255)},{int(g * 255)},{int(b * 255)},0.85); color: {text_color}")
+        except Exception:  # noqa: BLE001
+            styles.append("")
+    return styles
+
+
+def _style_table(df: pd.DataFrame):
+    """Zwraca pandas.Styler z kolorowaniem wg znaczenia kolumn — albo surowy
+    df bez zmian, jeśli stylowanie się nie powiedzie (np. brak matplotlib)."""
+    try:
+        styler = df.style
+    except Exception:  # noqa: BLE001
+        return df
+
+    for col in GREEN_HIGHER_BETTER:
+        if col in df.columns:
+            try:
+                styler = styler.apply(lambda s: _numeric_gradient_style(s, "Greens"), subset=[col])
+            except Exception:  # noqa: BLE001
+                pass
+
+    for col in RED_HIGHER_WORSE:
+        if col in df.columns:
+            try:
+                styler = styler.apply(lambda s: _numeric_gradient_style(s, "Reds"), subset=[col])
+            except Exception:  # noqa: BLE001
+                pass
+
+    for col in DIVERGING_ZERO_CENTERED:
+        if col in df.columns:
+            try:
+                styler = styler.apply(lambda s: _numeric_gradient_style(s, "RdYlGn", center=0.0), subset=[col])
+            except Exception:  # noqa: BLE001
+                pass
+
+    if "RSI" in df.columns:
+        try:
+            styler = styler.map(_rsi_cell_style, subset=["RSI"])
+        except Exception:  # noqa: BLE001
+            try:
+                styler = styler.applymap(_rsi_cell_style, subset=["RSI"])  # starsze pandas
+            except Exception:  # noqa: BLE001
+                pass
+
+    return styler
+
+
+def _render_table(df: pd.DataFrame, height: int = 600) -> None:
+    """Wspólny renderer tabel: kolorowanie + dymki z wyjaśnieniami naraz,
+    z bezpiecznym fallbackiem do zwykłej tabeli, gdyby coś nie zagrało."""
+    columns = list(df.columns)
+    config = _column_config_for(columns)
+    try:
+        st.dataframe(_style_table(df), use_container_width=True, height=height, column_config=config)
+    except Exception:  # noqa: BLE001
+        st.dataframe(df, use_container_width=True, height=height, column_config=config)
+
+
 # (kolumna, kierunek "higher"/"lower" = co jest lepiej) — używane do dynamicznego
 # porównania spółki z medianą JEJ WŁASNEGO sektora w bieżącej migawce.
 SECTOR_METRICS: list[tuple[str, str]] = [
@@ -243,6 +490,164 @@ MODULE_REGISTRY = [
 ]
 ALL_MODULE_KEYS = [key for key, _ in MODULE_REGISTRY]
 
+MODULE_DESCRIPTIONS = {
+    "screener": "Filtrowanie i przegląd wszystkich zeskanowanych spółek/ETF-ów naraz.",
+    "strategie": "Gotowe strategie inwestycyjne (Deep Value, Momentum, Dywidendowa i inne).",
+    "overview": "Kondycja całego rynku na raz — szerokość, heatmapy, top ruchy dnia.",
+    "sector": "Porównanie spółki z medianą jej sektora — dynamicznie, na żywo.",
+    "dividends": "Szukanie tanich spółek przed sezonem dywidendowym.",
+    "custom": "Własny ranking na bazie wag wskaźników, które sam ustawisz.",
+    "watchlist": "Lista obserwowanych spółek z Twoimi notatkami.",
+    "bt_strategy": "Sprawdzenie historycznej skuteczności każdej strategii.",
+    "backtest": "Szczegóły jednej spółki wstecz w czasie + najnowsze newsy.",
+}
+
+# "Profile inwestora" — jeden klik ustawia sensowny zestaw modułów i kolumn
+# Screenera naraz, zamiast ręcznego przebijania się przez wszystkie opcje.
+PROFILES = [
+    {
+        "key": "dividend",
+        "label": "💰 Dywidendowy",
+        "desc": "Szukam stabilnych spółek z wysoką, bezpieczną dywidendą.",
+        "modules": ["screener", "strategie", "dividends", "watchlist", "backtest"],
+        "screener_columns": [
+            "Rynek", "Sektor", "Stopa Dyw. (%)", "Payout ratio (%)",
+            "Dyw. w tym roku", "ROE (%)", "Liczba flag",
+        ],
+    },
+    {
+        "key": "deep_value",
+        "label": "📉 Deep Value (okazje)",
+        "desc": "Szukam spółek mocno przecenionych, ale wciąż zdrowych fundamentalnie.",
+        "modules": ["screener", "strategie", "overview", "sector", "watchlist", "bt_strategy", "backtest"],
+        "screener_columns": [
+            "Rynek", "Sektor", "pct_from_ath", "ROE (%)",
+            "Marża Operac. (%)", "Dług/Kapitał", "Liczba flag",
+        ],
+    },
+    {
+        "key": "momentum",
+        "label": "🚀 Momentum",
+        "desc": "Szukam spółek w silnym, potwierdzonym trendzie wzrostowym.",
+        "modules": ["screener", "strategie", "overview", "custom", "bt_strategy", "backtest"],
+        "screener_columns": [
+            "Rynek", "RSI", "volume_ratio", "SMA50", "SMA200", "pct_from_ath", "Buy Score",
+        ],
+    },
+    {
+        "key": "everything",
+        "label": "🧭 Chcę widzieć wszystko",
+        "desc": "Pokaż mi pełen zestaw modułów i wskaźników — sam sobie dobiorę.",
+        "modules": list(ALL_MODULE_KEYS),
+        "screener_columns": list(DEFAULT_SCREENER_COLUMNS),
+    },
+]
+
+
+def _card(title: str, desc: str, button_label: str, key: str, primary: bool = False) -> bool:
+    """Klikalna 'karta' (obwiedziony kontener) z tytułem, opisem i przyciskiem
+    wyboru. Zwraca True dokładnie w tym przebiegu, w którym kliknięto przycisk."""
+    with st.container(border=True):
+        st.markdown(f"### {title}")
+        st.caption(desc)
+        return st.button(
+            button_label, key=key, use_container_width=True,
+            type="primary" if primary else "secondary",
+        )
+
+
+def render_onboarding_wizard() -> None:
+    """Kreator powitalny pokazywany, dopóki użytkownik go nie ukończy albo
+    nie pominie. Krok po kroku, kafelkami — zamiast jednej gęstej listy."""
+    step = st.session_state.get("onboarding_step", 1)
+    st.header("👋 Witaj w XTB Screenerze!")
+
+    if step == 1:
+        st.write(
+            "Chcesz, żebym w kilku krokach dopasował widok appki do Twojego stylu "
+            "inwestowania? Zajmie to dosłownie kilka kliknięć."
+        )
+        c1, c2 = st.columns(2)
+        with c1:
+            if _card("✨ Tak, dopasuj do mnie", "Wybierzesz profil albo moduły ręcznie.",
+                      "Zaczynamy", "wiz_start", primary=True):
+                st.session_state["onboarding_step"] = 2
+                st.rerun()
+        with c2:
+            if _card("⏭️ Pomiń", "Pokaż mi od razu wszystkie moduły i wskaźniki.",
+                      "Pomiń personalizację", "wiz_skip"):
+                db.set_preference("visible_modules", ALL_MODULE_KEYS)
+                db.set_preference("onboarding_done", True)
+                st.rerun()
+
+    elif step == 2:
+        st.write("Wybierz profil, który najlepiej Cię opisuje:")
+        profile_cols = st.columns(2)
+        for i, profile in enumerate(PROFILES):
+            with profile_cols[i % 2]:
+                if _card(profile["label"], profile["desc"], "Wybierz ten profil",
+                          f"wiz_profile_{profile['key']}"):
+                    db.set_preference("visible_modules", profile["modules"])
+                    db.set_preference("screener_columns", profile["screener_columns"])
+                    st.session_state["onboarding_chosen_profile"] = profile["label"]
+                    st.session_state["onboarding_step"] = 3
+                    st.rerun()
+
+        st.divider()
+        if st.button("🧩 Żaden z tych — wybiorę moduły sam", key="wiz_manual"):
+            st.session_state["onboarding_step"] = "manual"
+            st.rerun()
+
+    elif step == "manual":
+        st.write("Kliknij moduły, które chcesz mieć widoczne — resztę zawsze dodasz później.")
+        if "wiz_manual_selected" not in st.session_state:
+            st.session_state["wiz_manual_selected"] = set(ALL_MODULE_KEYS)
+
+        cols = st.columns(3)
+        for i, (mkey, mlabel) in enumerate(MODULE_REGISTRY):
+            with cols[i % 3]:
+                is_selected = mkey in st.session_state["wiz_manual_selected"]
+                with st.container(border=True):
+                    st.markdown(f"### {mlabel}")
+                    st.caption(MODULE_DESCRIPTIONS.get(mkey, ""))
+                    btn_label = "✅ Wybrany" if is_selected else "➕ Dodaj"
+                    if st.button(btn_label, key=f"wiz_mod_{mkey}", use_container_width=True,
+                                  type="primary" if is_selected else "secondary"):
+                        if is_selected:
+                            st.session_state["wiz_manual_selected"].discard(mkey)
+                        else:
+                            st.session_state["wiz_manual_selected"].add(mkey)
+                        st.rerun()
+
+        st.divider()
+        if st.button("✅ Zatwierdź wybór", key="wiz_manual_confirm", type="primary"):
+            db.set_preference("visible_modules", list(st.session_state["wiz_manual_selected"]))
+            st.session_state["onboarding_chosen_profile"] = "Twój własny wybór modułów"
+            st.session_state["onboarding_step"] = 3
+            st.rerun()
+
+    elif step == 3:
+        chosen = st.session_state.get("onboarding_chosen_profile", "Twój wybór")
+        st.success(f"✅ Gotowe! Appka jest dopasowana: **{chosen}**.")
+        st.caption(
+            "Zawsze możesz to zmienić w panelu '🧩 Wybierz widoczne moduły' na górze "
+            "strony, albo w personalizacji wskaźników wewnątrz każdej zakładki."
+        )
+        if st.button("🚀 Przejdź do appki", key="wiz_finish", type="primary"):
+            db.set_preference("onboarding_done", True)
+            st.rerun()
+
+
+if not db.get_preference("onboarding_done", False):
+    render_onboarding_wizard()
+    st.stop()
+
+if st.button("🎨 Uruchom kreator personalizacji ponownie", key="wiz_relaunch"):
+    db.delete_preference("onboarding_done")
+    st.session_state["onboarding_step"] = 1
+    st.session_state.pop("wiz_manual_selected", None)
+    st.rerun()
+
 with st.expander("🧩 Wybierz widoczne moduły (zakładki)", expanded=False):
     st.caption(
         "Odznacz moduły, których nie używasz — znikną z widoku appki. Wybór "
@@ -287,38 +692,16 @@ def render_screener():
         if "Rynek" not in df.columns:
             df["Rynek"] = "Nieznany (stara migawka sprzed dodania filtra rynków)"
 
-        with st.expander("🎛️ Personalizuj widoczne wskaźniki", expanded=False):
-            st.caption(
-                "Wybierz, które wskaźniki chcesz widzieć w tabeli — Ticker, Nazwa i Cena "
-                "są zawsze pokazywane. Wybór zapisuje się jako domyślny na przycisk "
-                "poniżej i zostanie zapamiętany przy kolejnych wejściach na stronę "
-                "(dopóki appka nie zostanie zredeployowana)."
-            )
-            saved_cols = db.get_preference("screener_columns", DEFAULT_SCREENER_COLUMNS)
-            chosen_cols: list[str] = []
-            pick_col1, pick_col2 = st.columns(2)
-            for i, (group_name, group_cols) in enumerate(INDICATOR_GROUPS.items()):
-                available = [c for c in group_cols if c in df.columns]
-                target = pick_col1 if i % 2 == 0 else pick_col2
-                with target:
-                    picked = st.multiselect(
-                        group_name, available,
-                        default=[c for c in saved_cols if c in available],
-                        key=f"pick_{group_name}",
-                    )
-                    chosen_cols.extend(picked)
+        picker_available_cols = list(df.columns)
+        if "Waluta" in df.columns and "Cena (PLN)" not in picker_available_cols:
+            picker_available_cols.append("Cena (PLN)")  # doliczane dopiero niżej, ale ma być wybieralne już tutaj
 
-            bsave, breset = st.columns(2)
-            with bsave:
-                if st.button("💾 Zapisz jako domyślne"):
-                    db.set_preference("screener_columns", chosen_cols)
-                    st.success("Zapisano — te wskaźniki będą domyślne przy kolejnych wejściach.")
-            with breset:
-                if st.button("↩️ Reset do domyślnych"):
-                    db.delete_preference("screener_columns")
-                    st.rerun()
-
-        active_columns = chosen_cols if chosen_cols else DEFAULT_SCREENER_COLUMNS
+        active_columns = _personalize_columns(
+            pref_key="screener_columns",
+            available_columns=picker_available_cols,
+            default_columns=DEFAULT_SCREENER_COLUMNS,
+            mandatory_columns=["Ticker", "Nazwa", "Cena"],
+        )
 
         only_verified = st.checkbox("Pokaż tylko tickery ręcznie zweryfikowane na XTB", value=False)
         if only_verified and VERIFIED_TICKERS:
@@ -386,14 +769,9 @@ def render_screener():
                 "ułatwia porównanie spółek notowanych w różnych walutach."
             )
 
-        display_cols = ["Ticker", "Nazwa", "Cena"] + [
-            c for c in active_columns if c in filtered.columns and c not in ("Ticker", "Nazwa", "Cena")
-        ]
+        display_cols = [c for c in active_columns if c in filtered.columns]
         display_df = filtered[display_cols]
-        st.dataframe(
-            display_df, use_container_width=True, height=600,
-            column_config=_column_config_for(display_cols),
-        )
+        _render_table(display_df, height=600)
         st.download_button(
             "⬇️ Pobierz CSV", filtered.to_csv(index=False).encode("utf-8"),
             file_name=f"screener_{chosen_date}.csv",
@@ -432,7 +810,7 @@ def render_screener():
                         })
             if earnings_rows:
                 edf = pd.DataFrame(earnings_rows).sort_values("Za ile dni")
-                st.dataframe(edf, use_container_width=True)
+                _render_table(edf, height=300)
                 soon = edf[edf["Za ile dni"] <= 7]
                 if not soon.empty:
                     st.warning(
@@ -506,9 +884,17 @@ def render_strategie():
                 "ponownie (Actions → Run workflow), żeby ją policzyć."
             )
         else:
+            active_strategy_cols = _personalize_columns(
+                pref_key=f"strategie_columns__{strategy_name}",
+                available_columns=list(df.columns),
+                default_columns=[c for c in STRATEGY_COLUMNS[strategy_name] if c not in ("Ticker", "Nazwa")],
+                mandatory_columns=["Ticker", "Nazwa", "Cena"],
+                label=f"Personalizuj kolumny dla: {strategy_name}",
+            )
             ranked = df[df["Typ"] == "stock"].sort_values(score_col, ascending=False).head(30)
-            display_cols = [c for c in STRATEGY_COLUMNS[strategy_name] + [score_col] if c in ranked.columns]
-            st.dataframe(ranked[display_cols], use_container_width=True, height=600)
+            display_cols = [c for c in active_strategy_cols + [score_col] if c in ranked.columns]
+            display_cols = list(dict.fromkeys(display_cols))  # usuń ewentualny duplikat score_col
+            _render_table(ranked[display_cols], height=600)
 
         st.divider()
         st.subheader("🔗 Zbieżność strategii")
@@ -545,7 +931,7 @@ def render_strategie():
                 conv_df = conv_df.sort_values(
                     ["Liczba strategii (w TOP N)"] + score_cols, ascending=False
                 )
-                st.dataframe(conv_df[show_cols], use_container_width=True, height=400)
+                _render_table(conv_df[show_cols], height=400)
 
 # ---------------------------------------------------------------------------
 # TAB 3 — Globalny przegląd: kondycja całego rynku, niezależnie od strategii
@@ -643,16 +1029,10 @@ def render_overview():
             colu, cold = st.columns(2)
             with colu:
                 st.write("📈 Największe wzrosty")
-                st.dataframe(
-                    merged.sort_values("Zmiana %", ascending=False).head(10)[show_cols],
-                    use_container_width=True,
-                )
+                _render_table(merged.sort_values("Zmiana %", ascending=False).head(10)[show_cols], height=350)
             with cold:
                 st.write("📉 Największe spadki")
-                st.dataframe(
-                    merged.sort_values("Zmiana %", ascending=True).head(10)[show_cols],
-                    use_container_width=True,
-                )
+                _render_table(merged.sort_values("Zmiana %", ascending=True).head(10)[show_cols], height=350)
         else:
             st.info("Top ruchy pojawią się po drugiej migawce (potrzebne porównanie dzień do dnia).")
 
@@ -731,13 +1111,20 @@ def render_sector():
 
                 st.divider()
                 st.subheader(f"Wszystkie spółki w sektorze „{sector}”")
-                sector_cols = [c for c in (
-                    ["Ticker", "Nazwa", "Rynek", "Cena", "Buy Score"] + [m for m, _ in SECTOR_METRICS]
-                ) if c in peers.columns]
-                st.dataframe(
-                    peers[sector_cols].sort_values("Buy Score", ascending=False),
-                    use_container_width=True, height=400,
-                    column_config=_column_config_for(sector_cols),
+                default_sector_cols = ["Rynek", "Buy Score"] + [m for m, _ in SECTOR_METRICS]
+                active_sector_cols = _personalize_columns(
+                    pref_key="sector_columns",
+                    available_columns=list(peers.columns),
+                    default_columns=default_sector_cols,
+                    mandatory_columns=["Ticker", "Nazwa", "Cena"],
+                    label="Personalizuj kolumny tej tabeli",
+                )
+                sector_cols = [c for c in active_sector_cols if c in peers.columns]
+                sort_col = "Buy Score" if "Buy Score" in sector_cols else sector_cols[-1]
+                _render_table(peers[sector_cols].sort_values(sort_col, ascending=False), height=400)
+                st.download_button(
+                    "⬇️ Pobierz CSV (wszystkie dane sektora)", peers.to_csv(index=False).encode("utf-8"),
+                    file_name=f"sektor_{sector}_{dates[0]}.csv",
                 )
 
 # ---------------------------------------------------------------------------
@@ -801,17 +1188,25 @@ def render_dividends():
 
         st.caption(f"Znaleziono **{len(candidates)}** spółek spełniających kryteria.")
 
-        display_cols = [c for c in [
-            "Ticker", "Nazwa", "Rynek", "Cena", "Stopa Dyw. (%)",
-            "Dyw. w poprzednim roku", "Dyw. w tym roku", "Poprzednia dywidenda", "Przyszła dywidenda",
-            "Zmiana ceny (1Y%)", "Lata z dywidendą (3Y)",
-            "Payout ratio (%)", "C/Z (P/E)", "ROE (%)",
+        default_dividend_cols = [
+            "Rynek", "Stopa Dyw. (%)", "Dyw. w poprzednim roku", "Dyw. w tym roku",
+            "Poprzednia dywidenda", "Przyszła dywidenda", "Zmiana ceny (1Y%)",
+            "Lata z dywidendą (3Y)", "Payout ratio (%)", "C/Z (P/E)", "ROE (%)",
             "Marża Operac. (%)", "Marża netto (%)", "Wzrost przychodów (%)",
-            "Wzrost EPS (%)", "Dług/Kapitał", "Liczba flag", score_col,
-        ] if c in candidates.columns]
-        st.dataframe(candidates[display_cols], use_container_width=True, height=600)
+            "Wzrost EPS (%)", "Dług/Kapitał", "Liczba flag",
+        ]
+        active_dividend_cols = _personalize_columns(
+            pref_key="dividends_columns",
+            available_columns=list(candidates.columns),
+            default_columns=default_dividend_cols,
+            mandatory_columns=["Ticker", "Nazwa", "Cena"],
+        )
+        display_cols = list(dict.fromkeys(
+            [c for c in active_dividend_cols if c in candidates.columns] + [score_col]
+        ))
+        _render_table(candidates[display_cols], height=600)
         st.download_button(
-            "⬇️ Pobierz CSV", candidates[display_cols].to_csv(index=False).encode("utf-8"),
+            "⬇️ Pobierz CSV (wszystkie dane)", candidates.to_csv(index=False).encode("utf-8"),
             file_name=f"dywidendy_{dates[0]}.csv",
         )
         st.caption(
@@ -892,7 +1287,7 @@ def render_custom():
             active_cols = [col for _, col, _, _ in CUSTOM_COMPONENTS if weights.get(col, 0) > 0]
             show_cols = ["Ticker", "Nazwa", "Rynek", "Cena", "Własny wynik"] + active_cols + ["Liczba flag"]
             show_cols = [c for c in dict.fromkeys(show_cols) if c in ranked.columns]
-            st.dataframe(ranked[show_cols], use_container_width=True, height=600)
+            _render_table(ranked[show_cols], height=600)
 
             st.divider()
             st.subheader("Backtest własnych wag")
@@ -936,7 +1331,7 @@ def render_custom():
                         st.line_chart(pd.DataFrame(
                             {"Skumulowany zwrot %": (equity * 100).round(2)}, index=cw_bt["Data wyjścia"]
                         ))
-                        st.dataframe(cw_bt, use_container_width=True, height=300)
+                        _render_table(cw_bt, height=300)
 
 # ---------------------------------------------------------------------------
 # TAB 7 — Watchlist: oznaczone tickery z własnymi notatkami
@@ -974,20 +1369,33 @@ def render_watchlist():
         dates = db.list_dates()
         if dates:
             latest = db.load_snapshot(dates[0])
-            merge_cols = [c for c in [
-                "Ticker", "Nazwa", "Rynek", "Cena", "Buy Score", "Liczba flag", "pct_from_ath",
-            ] if c in latest.columns]
-            wl = wl.merge(latest[merge_cols], on="Ticker", how="left")
-            if wl["Nazwa"].isna().any():
+            wl = wl.merge(latest, on="Ticker", how="left")
+            if "Nazwa" in wl.columns and wl["Nazwa"].isna().any():
                 st.caption(
                     "Niektóre spółki nie mają jeszcze danych z najnowszej migawki "
                     "(np. dodane po ostatnim skanie) — ceny/score pojawią się po kolejnym skanie."
                 )
 
+        default_watchlist_cols = ["Rynek", "Cena", "Buy Score", "Liczba flag", "pct_from_ath"]
+        active_watchlist_cols = _personalize_columns(
+            pref_key="watchlist_columns",
+            available_columns=list(wl.columns),
+            default_columns=[c for c in default_watchlist_cols if c in wl.columns],
+            mandatory_columns=["Ticker", "Notatka"],
+            label="Personalizuj dane widoczne obok notatek",
+        )
+        wl_display_cols = list(dict.fromkeys(
+            [c for c in active_watchlist_cols if c in wl.columns] + ["Dodano"]
+        ))
+        wl_view = wl[wl_display_cols]
+
         edited = st.data_editor(
-            wl,
-            column_config={"Notatka": st.column_config.TextColumn("Notatka", width="large")},
-            disabled=[c for c in wl.columns if c != "Notatka"],
+            wl_view,
+            column_config={
+                "Notatka": st.column_config.TextColumn("Notatka", width="large"),
+                **_column_config_for([c for c in wl_display_cols if c not in ("Notatka",)]),
+            },
+            disabled=[c for c in wl_view.columns if c != "Notatka"],
             hide_index=True,
             use_container_width=True,
             key="wl_editor",
@@ -1070,7 +1478,7 @@ def render_bt_strategy():
             )
             st.line_chart(equity_df)
 
-            st.dataframe(bt_result, use_container_width=True, height=400)
+            _render_table(bt_result, height=400)
 
 # ---------------------------------------------------------------------------
 # TAB 9 — Backtest: jak wyglądała spółka X dni/tygodni/miesięcy temu
