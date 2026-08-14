@@ -14,6 +14,7 @@ from core import db  # noqa: E402
 from core.scanner import (  # noqa: E402
     compute_indicators, price_history_for_backtest, get_sp500_map, get_sp400_map,
     STRATEGIES, backtest_strategy, get_fx_rates, get_next_earnings_date, get_ticker_news,
+    generate_brief, STRATEGY_MAX_SCORES,
 )
 
 st.set_page_config(page_title="XTB Screener", layout="wide")
@@ -480,6 +481,7 @@ ALL_NAMES.update(sp400_map)
 MODULE_REGISTRY = [
     ("screener", "🔍 Screener"),
     ("strategie", "🧭 Strategie"),
+    ("profile", "🔎 Profil spółki"),
     ("overview", "🌍 Globalny przegląd"),
     ("sector", "📊 vs Sektor"),
     ("dividends", "💰 Dywidendy"),
@@ -493,6 +495,7 @@ ALL_MODULE_KEYS = [key for key, _ in MODULE_REGISTRY]
 MODULE_DESCRIPTIONS = {
     "screener": "Filtrowanie i przegląd wszystkich zeskanowanych spółek/ETF-ów naraz.",
     "strategie": "Gotowe strategie inwestycyjne (Deep Value, Momentum, Dywidendowa i inne).",
+    "profile": "Wpisz spółkę i zobacz WSZYSTKIE jej dane naraz + krótki brief inwestycyjny.",
     "overview": "Kondycja całego rynku na raz — szerokość, heatmapy, top ruchy dnia.",
     "sector": "Porównanie spółki z medianą jej sektora — dynamicznie, na żywo.",
     "dividends": "Szukanie tanich spółek przed sezonem dywidendowym.",
@@ -509,7 +512,7 @@ PROFILES = [
         "key": "dividend",
         "label": "💰 Dywidendowy",
         "desc": "Szukam stabilnych spółek z wysoką, bezpieczną dywidendą.",
-        "modules": ["screener", "strategie", "dividends", "watchlist", "backtest"],
+        "modules": ["screener", "strategie", "profile", "dividends", "watchlist", "backtest"],
         "screener_columns": [
             "Rynek", "Sektor", "Stopa Dyw. (%)", "Payout ratio (%)",
             "Dyw. w tym roku", "ROE (%)", "Liczba flag",
@@ -519,7 +522,7 @@ PROFILES = [
         "key": "deep_value",
         "label": "📉 Deep Value (okazje)",
         "desc": "Szukam spółek mocno przecenionych, ale wciąż zdrowych fundamentalnie.",
-        "modules": ["screener", "strategie", "overview", "sector", "watchlist", "bt_strategy", "backtest"],
+        "modules": ["screener", "strategie", "profile", "overview", "sector", "watchlist", "bt_strategy", "backtest"],
         "screener_columns": [
             "Rynek", "Sektor", "pct_from_ath", "ROE (%)",
             "Marża Operac. (%)", "Dług/Kapitał", "Liczba flag",
@@ -529,7 +532,7 @@ PROFILES = [
         "key": "momentum",
         "label": "🚀 Momentum",
         "desc": "Szukam spółek w silnym, potwierdzonym trendzie wzrostowym.",
-        "modules": ["screener", "strategie", "overview", "custom", "bt_strategy", "backtest"],
+        "modules": ["screener", "strategie", "profile", "overview", "custom", "bt_strategy", "backtest"],
         "screener_columns": [
             "Rynek", "RSI", "volume_ratio", "SMA50", "SMA200", "pct_from_ath", "Buy Score",
         ],
@@ -934,7 +937,91 @@ def render_strategie():
                 _render_table(conv_df[show_cols], height=400)
 
 # ---------------------------------------------------------------------------
-# TAB 3 — Globalny przegląd: kondycja całego rynku, niezależnie od strategii
+# TAB 3 — Profil spółki: wszystkie dane naraz + krótki brief inwestycyjny
+# ---------------------------------------------------------------------------
+def render_profile():
+    st.write(
+        "Wpisz spółkę, żeby zobaczyć **wszystkie** zebrane o niej dane naraz, plus "
+        "krótki brief łączący wszystkie strategie i najważniejsze wskaźniki "
+        "potrzebne do podjęcia decyzji."
+    )
+    dates = db.list_dates()
+    if not dates:
+        st.info("Brak danych — uruchom skan.")
+        return
+
+    ticker = st.selectbox(
+        "Spółka / ETF", sorted(ALL_NAMES.keys()),
+        format_func=lambda t: f"{t} — {ALL_NAMES[t]}", key="profile_ticker",
+    )
+    df = db.load_snapshot(dates[0])
+    row_df = df[df["Ticker"] == ticker]
+    if row_df.empty:
+        st.warning(
+            "Ta spółka nie ma jeszcze danych z najnowszej migawki (np. dodana po "
+            "ostatnim skanie) — uruchom skan ponownie albo wybierz inną spółkę."
+        )
+        return
+    row = row_df.iloc[0].to_dict()
+
+    st.subheader(f"{row.get('Nazwa', ticker)} ({ticker})")
+    st.caption(f"{row.get('Rynek', '—')} · {row.get('Sektor', 'Nieznany')} / {row.get('Branża', 'Nieznana')}")
+
+    m1, m2, m3, m4 = st.columns(4)
+    cena = row.get("Cena")
+    waluta = row.get("Waluta", "")
+    m1.metric("Cena", f"{cena} {waluta}" if cena is not None else "BRAK")
+    if waluta and waluta != "PLN":
+        try:
+            rate = _fx_rates((waluta,)).get(waluta)
+            if rate and isinstance(cena, (int, float)):
+                m2.metric("Cena (PLN)", f"{round(cena * rate, 2)} PLN")
+        except Exception:  # noqa: BLE001
+            pass
+    m3.metric("Buy Score", row.get("Buy Score", "BRAK"))
+    n_flags = row.get("Liczba flag", 0)
+    m4.metric("Czerwone flagi", n_flags, delta=None)
+
+    st.divider()
+    st.subheader("📋 Brief inwestycyjny")
+    for line in generate_brief(row):
+        st.write(f"- {line}")
+    if row.get("Czerwone flagi", "Brak") != "Brak":
+        with st.expander("Zobacz treść czerwonych flag"):
+            for f in str(row.get("Czerwone flagi", "")).split("; "):
+                st.write(f)
+
+    st.divider()
+    st.subheader("🧭 Wszystkie strategie na raz")
+    strategy_rows = []
+    for name, (score_col, _) in STRATEGIES.items():
+        score = row.get(score_col)
+        max_score = STRATEGY_MAX_SCORES.get(score_col)
+        pct = round(score / max_score * 100) if isinstance(score, (int, float)) and max_score else None
+        strategy_rows.append({
+            "Strategia": name, "Wynik": score, "Maks. możliwy": max_score,
+            "% maksimum": pct,
+        })
+    _render_table(pd.DataFrame(strategy_rows), height=200)
+
+    st.divider()
+    st.subheader("📚 Wszystkie dane, wg kategorii")
+    st.caption("Kliknij kategorię, żeby rozwinąć pełną listę wskaźników dla tej spółki.")
+    for group_name, group_cols in INDICATOR_GROUPS.items():
+        available = [c for c in group_cols if c in row]
+        if not available:
+            continue
+        icon = GROUP_ICONS.get(group_name, "📁")
+        with st.expander(f"{icon} {group_name} ({len(available)})", expanded=False):
+            for col in available:
+                val = row.get(col, "BRAK")
+                help_text = INDICATOR_HELP.get(col, "")
+                st.write(f"**{col}:** {val}")
+                if help_text:
+                    st.caption(help_text)
+
+# ---------------------------------------------------------------------------
+# TAB 4 — Globalny przegląd: kondycja całego rynku, niezależnie od strategii
 # ---------------------------------------------------------------------------
 def render_overview():
     dates = db.list_dates()
@@ -1037,7 +1124,7 @@ def render_overview():
             st.info("Top ruchy pojawią się po drugiej migawce (potrzebne porównanie dzień do dnia).")
 
 # ---------------------------------------------------------------------------
-# TAB 4 — vs Sektor: dynamiczne porównanie spółki z medianą jej sektora
+# TAB 5 — vs Sektor: dynamiczne porównanie spółki z medianą jej sektora
 # ---------------------------------------------------------------------------
 def render_sector():
     st.write(
@@ -1128,7 +1215,7 @@ def render_sector():
                 )
 
 # ---------------------------------------------------------------------------
-# TAB 5 — Dywidendy: wysoka stopa dywidendy, cena jeszcze nie wzrosła
+# TAB 6 — Dywidendy: wysoka stopa dywidendy, cena jeszcze nie wzrosła
 # ---------------------------------------------------------------------------
 def render_dividends():
     st.write(
@@ -1217,7 +1304,7 @@ def render_dividends():
         )
 
 # ---------------------------------------------------------------------------
-# TAB 6 — Własny scoring: kreator wag zamiast sztywnych strategii
+# TAB 7 — Własny scoring: kreator wag zamiast sztywnych strategii
 # ---------------------------------------------------------------------------
 # (label, kolumna, kierunek "higher"/"lower" = co jest lepsze, domyślna waga)
 CUSTOM_COMPONENTS = [
@@ -1334,7 +1421,7 @@ def render_custom():
                         _render_table(cw_bt, height=300)
 
 # ---------------------------------------------------------------------------
-# TAB 7 — Watchlist: oznaczone tickery z własnymi notatkami
+# TAB 8 — Watchlist: oznaczone tickery z własnymi notatkami
 # ---------------------------------------------------------------------------
 def render_watchlist():
     st.write(
@@ -1418,7 +1505,7 @@ def render_watchlist():
                 st.rerun()
 
 # ---------------------------------------------------------------------------
-# TAB 8 — Backtest strategii: czy TOP N wg danego score'a faktycznie zarabia?
+# TAB 9 — Backtest strategii: czy TOP N wg danego score'a faktycznie zarabia?
 # ---------------------------------------------------------------------------
 def render_bt_strategy():
     st.write(
@@ -1481,7 +1568,7 @@ def render_bt_strategy():
             _render_table(bt_result, height=400)
 
 # ---------------------------------------------------------------------------
-# TAB 9 — Backtest: jak wyglądała spółka X dni/tygodni/miesięcy temu
+# TAB 10 — Backtest: jak wyglądała spółka X dni/tygodni/miesięcy temu
 # ---------------------------------------------------------------------------
 def render_backtest():
     ticker = st.selectbox("Spółka / ETF", sorted(ALL_NAMES.keys()),
@@ -1539,6 +1626,7 @@ def render_backtest():
 RENDER_FUNCS = {
     "screener": render_screener,
     "strategie": render_strategie,
+    "profile": render_profile,
     "overview": render_overview,
     "sector": render_sector,
     "dividends": render_dividends,
