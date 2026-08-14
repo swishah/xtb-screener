@@ -304,6 +304,69 @@ STRATEGIES = {
     "Dywidenda-okazja (sezon dywidendowy)": ("Score: Dywidenda-Okazja", dividend_opportunity_score),
 }
 
+# Maksymalne teoretyczne wartości każdego score'a — zweryfikowane empirycznie
+# (wywołaniem funkcji na "idealnych" danych), nie liczone ręcznie, żeby uniknąć
+# pomyłki. Używane do pokazania % maksimum w briefie spółki.
+STRATEGY_MAX_SCORES = {
+    "Buy Score": 9,
+    "Score: Deep Value": 10,
+    "Score: Momentum": 8,
+    "Score: Dywidendowa": 7,
+    "Score: Dywidenda-Okazja": 13,
+}
+
+
+def generate_brief(row: dict) -> list[str]:
+    """
+    Krótkie, czytelne dla człowieka podsumowanie sytuacji spółki na bazie już
+    policzonych danych — reguły, nie AI. Zwraca listę zdań/punktów do wypunktowania.
+    """
+    lines: list[str] = []
+
+    pe = row.get("C/Z (P/E)")
+    if isinstance(pe, (int, float)):
+        if pe < 0:
+            lines.append(f"**Wycena:** ujemne C/Z ({pe}) — spółka odnotowuje stratę, standardowe mnożniki wyceny tracą tu sens.")
+        elif pe < 15:
+            lines.append(f"**Wycena:** C/Z {pe} — relatywnie tanio (porównaj z medianą sektora w zakładce „vs Sektor”).")
+        elif pe > 25:
+            lines.append(f"**Wycena:** C/Z {pe} — relatywnie drogo, rynek zakłada spory wzrost zysków.")
+        else:
+            lines.append(f"**Wycena:** C/Z {pe} — w okolicach przeciętnej.")
+
+    price, sma200 = row.get("Cena"), row.get("SMA200")
+    if isinstance(price, (int, float)) and isinstance(sma200, (int, float)):
+        trend = "długoterminowa hossa (cena nad SMA200)" if price > sma200 else "długoterminowa bessa (cena pod SMA200)"
+        lines.append(f"**Trend:** {trend}.")
+
+    rsi = row.get("RSI")
+    if isinstance(rsi, (int, float)):
+        if rsi < 30:
+            lines.append(f"**RSI** {rsi} — wyprzedanie, możliwe odbicie.")
+        elif rsi > 70:
+            lines.append(f"**RSI** {rsi} — wykupienie, podwyższone ryzyko korekty.")
+
+    ath = row.get("pct_from_ath")
+    if isinstance(ath, (int, float)) and ath < -15:
+        lines.append(f"**Dystans od ATH:** {ath}% — sprawdź w Deep Value, czy to okazja, czy sygnał realnych problemów biznesu.")
+
+    yld = row.get("Stopa Dyw. (%)")
+    if isinstance(yld, (int, float)):
+        season_bit = ""
+        if row.get("Dyw. w poprzednim roku") == "Tak" and row.get("Dyw. w tym roku") == "Nie":
+            season_bit = " Płaciła w zeszłym roku, jeszcze nie w tym — wypłata może być dopiero przed nią."
+        lines.append(f"**Dywidenda:** stopa {yld}%.{season_bit}")
+    else:
+        lines.append("**Dywidenda:** spółka nie wypłaca dywidendy (albo brak danych).")
+
+    n_flags = row.get("Liczba flag", 0)
+    if isinstance(n_flags, (int, float)) and n_flags > 0:
+        lines.append(f"⚠️ **Wykryto {int(n_flags)} czerwoną/e flagę/i** — sprawdź szczegóły niżej.")
+    else:
+        lines.append("✅ Brak wykrytych automatycznych ostrzeżeń (czerwonych flag).")
+
+    return lines
+
 
 _SUFFIX_MARKET = {
     ".WA": "Polska", ".DE": "Niemcy", ".PA": "Francja", ".AS": "Holandia (Euronext)",
