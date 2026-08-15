@@ -318,54 +318,161 @@ STRATEGY_MAX_SCORES = {
 
 def generate_brief(row: dict) -> list[str]:
     """
-    Krótkie, czytelne dla człowieka podsumowanie sytuacji spółki na bazie już
-    policzonych danych — reguły, nie AI. Zwraca listę zdań/punktów do wypunktowania.
+    Rozbudowane, czytelne dla człowieka podsumowanie sytuacji spółki na bazie
+    już policzonych danych — reguły, nie AI (w pełni deterministyczne i
+    wyjaśnialne). Zwraca listę linii: te zaczynające się od '## ' to nagłówki
+    sekcji, reszta to punkty do wypunktowania pod danym nagłówkiem.
     """
     lines: list[str] = []
 
-    pe = row.get("C/Z (P/E)")
-    if isinstance(pe, (int, float)):
+    def _num(key):
+        v = row.get(key)
+        return v if isinstance(v, (int, float)) else None
+
+    # --- Wycena ------------------------------------------------------------
+    lines.append("## 💵 Wycena")
+    pe, fpe, pb, mcap = _num("C/Z (P/E)"), _num("Forward C/Z"), _num("C/WK (P/B)"), _num("Kapitalizacja (mld)")
+    if pe is not None:
         if pe < 0:
-            lines.append(f"**Wycena:** ujemne C/Z ({pe}) — spółka odnotowuje stratę, standardowe mnożniki wyceny tracą tu sens.")
+            lines.append(f"Ujemne C/Z ({pe}) — spółka odnotowuje stratę, standardowe mnożniki wyceny tracą tu sens.")
         elif pe < 15:
-            lines.append(f"**Wycena:** C/Z {pe} — relatywnie tanio (porównaj z medianą sektora w zakładce „vs Sektor”).")
+            lines.append(f"C/Z {pe} — relatywnie tanio (porównaj z medianą sektora w zakładce „vs Sektor”).")
         elif pe > 25:
-            lines.append(f"**Wycena:** C/Z {pe} — relatywnie drogo, rynek zakłada spory wzrost zysków.")
+            lines.append(f"C/Z {pe} — relatywnie drogo, rynek zakłada spory wzrost zysków.")
         else:
-            lines.append(f"**Wycena:** C/Z {pe} — w okolicach przeciętnej.")
+            lines.append(f"C/Z {pe} — w okolicach przeciętnej.")
+    if fpe is not None and pe is not None:
+        if fpe < pe:
+            lines.append(f"Forward C/Z ({fpe}) niższe niż bieżące — rynek oczekuje wzrostu zysków w kolejnym roku.")
+        elif fpe > pe:
+            lines.append(f"Forward C/Z ({fpe}) wyższe niż bieżące — rynek oczekuje spadku zysków.")
+    if pb is not None:
+        if pb < 1:
+            lines.append(f"C/WK {pb} — poniżej wartości księgowej (albo okazja, albo rynek widzi problem — sprawdź fundamenty).")
+        else:
+            lines.append(f"C/WK {pb}.")
+    if mcap is not None:
+        size = "duża (>10 mld)" if mcap > 10 else ("średnia (2-10 mld)" if mcap >= 2 else "mała (<2 mld)")
+        lines.append(f"Kapitalizacja {mcap} mld — spółka {size}, {'zwykle stabilniejsza' if mcap > 10 else 'większy potencjał wzrostu, ale i ryzyka'}.")
 
-    price, sma200 = row.get("Cena"), row.get("SMA200")
-    if isinstance(price, (int, float)) and isinstance(sma200, (int, float)):
+    # --- Trend i technika ----------------------------------------------------
+    lines.append("## 📈 Trend i technika")
+    price = _num("Cena")
+    sma20, sma50, sma100, sma200 = _num("SMA20"), _num("SMA50"), _num("SMA100"), _num("SMA200")
+    if price is not None and sma200 is not None:
         trend = "długoterminowa hossa (cena nad SMA200)" if price > sma200 else "długoterminowa bessa (cena pod SMA200)"
-        lines.append(f"**Trend:** {trend}.")
-
-    rsi = row.get("RSI")
-    if isinstance(rsi, (int, float)):
+        lines.append(f"Trend długoterminowy: {trend}.")
+    if price is not None and sma20 is not None and sma50 is not None:
+        short_trend = "wzrostowy" if price > sma20 and price > sma50 else ("spadkowy" if price < sma20 and price < sma50 else "mieszany/boczny")
+        lines.append(f"Trend krótkoterminowy (SMA20/50): {short_trend}.")
+    rsi = _num("RSI")
+    if rsi is not None:
         if rsi < 30:
-            lines.append(f"**RSI** {rsi} — wyprzedanie, możliwe odbicie.")
+            lines.append(f"RSI {rsi} — wyprzedanie, możliwe odbicie.")
         elif rsi > 70:
-            lines.append(f"**RSI** {rsi} — wykupienie, podwyższone ryzyko korekty.")
+            lines.append(f"RSI {rsi} — wykupienie, podwyższone ryzyko korekty.")
+        else:
+            lines.append(f"RSI {rsi} — neutralna strefa.")
+    if row.get("macd_bullish") is not None:
+        lines.append("MACD byczy (sygnał wzrostowy)." if row.get("macd_bullish") else "MACD niedźwiedzi (sygnał spadkowy).")
+    v_rat = _num("volume_ratio")
+    if v_rat is not None and v_rat > 1.3:
+        lines.append(f"Wolumen {v_rat}x średniej z 20 dni — wyraźnie podwyższone zainteresowanie rynku.")
+    ath = _num("pct_from_ath")
+    if ath is not None and ath < -15:
+        lines.append(f"Dystans od ATH: {ath}% — sprawdź w Deep Value, czy to okazja, czy sygnał realnych problemów biznesu.")
+    w52h, w52l = _num("52-tyg. maksimum"), _num("52-tyg. minimum")
+    if price is not None and w52h is not None and w52l is not None and w52h > w52l:
+        pos = round((price - w52l) / (w52h - w52l) * 100)
+        lines.append(f"Cena jest na {pos}% zakresu z ostatnich 52 tygodni (0% = roczne minimum, 100% = roczne maksimum).")
 
-    ath = row.get("pct_from_ath")
-    if isinstance(ath, (int, float)) and ath < -15:
-        lines.append(f"**Dystans od ATH:** {ath}% — sprawdź w Deep Value, czy to okazja, czy sygnał realnych problemów biznesu.")
+    # --- Jakość biznesu ------------------------------------------------------
+    lines.append("## 🏢 Jakość biznesu")
+    roe, op_m, net_m = _num("ROE (%)"), _num("Marża Operac. (%)"), _num("Marża netto (%)")
+    if roe is not None:
+        lines.append(f"ROE {roe}% — {'wysokie' if roe > 20 else ('dobre' if roe > 15 else ('przeciętne' if roe > 5 else 'niskie'))}.")
+    if op_m is not None:
+        lines.append(f"Marża operacyjna {op_m}%.")
+    if net_m is not None:
+        lines.append(f"Marża netto {net_m}%{' — spółka jest na stracie' if net_m < 0 else ''}.")
+    rev_g, eps_g = _num("Wzrost przychodów (%)"), _num("Wzrost EPS (%)")
+    if rev_g is not None:
+        lines.append(f"Przychody {'rosną' if rev_g > 0 else 'maleją'} o {abs(rev_g)}% rdr.")
+    if eps_g is not None:
+        lines.append(f"Zysk na akcję {'rośnie' if eps_g > 0 else 'maleje'} o {abs(eps_g)}% rdr.")
+    debt = _num("Dług/Kapitał")
+    if debt is not None:
+        lines.append(f"Dług/kapitał {debt}% — {'bezpiecznie' if debt < 50 else ('umiarkowanie' if debt < 150 else 'wysokie ryzyko finansowe')}.")
 
-    yld = row.get("Stopa Dyw. (%)")
-    if isinstance(yld, (int, float)):
+    # --- Dywidenda -------------------------------------------------------------
+    lines.append("## 💰 Dywidenda")
+    yld = _num("Stopa Dyw. (%)")
+    if yld is not None:
         season_bit = ""
         if row.get("Dyw. w poprzednim roku") == "Tak" and row.get("Dyw. w tym roku") == "Nie":
             season_bit = " Płaciła w zeszłym roku, jeszcze nie w tym — wypłata może być dopiero przed nią."
-        lines.append(f"**Dywidenda:** stopa {yld}%.{season_bit}")
+        lines.append(f"Stopa dywidendy {yld}%.{season_bit}")
+        payout = _num("Payout ratio (%)")
+        if payout is not None:
+            lines.append(f"Payout ratio {payout}% — {'bezpieczny poziom' if payout < 80 else 'wypłaca więcej niż bezpiecznie, sprawdź trwałość'}.")
+        years = row.get("Lata z dywidendą (3Y)")
+        if isinstance(years, (int, float)):
+            lines.append(f"Wypłacała dywidendę w {int(years)}/3 ostatnich lat.")
+        next_div = row.get("Przyszła dywidenda", "BRAK")
+        if next_div and next_div != "BRAK":
+            lines.append(f"Najbliższa wypłata: {next_div}.")
     else:
-        lines.append("**Dywidenda:** spółka nie wypłaca dywidendy (albo brak danych).")
+        lines.append("Spółka nie wypłaca dywidendy (albo brak danych).")
 
+    # --- Analitycy i ryzyko ------------------------------------------------------
+    lines.append("## 🔮 Analitycy i ryzyko")
+    rec = row.get("Rekomendacja analityków", "BRAK")
+    n_analysts = row.get("Liczba analityków", "BRAK")
+    if rec and rec != "BRAK":
+        extra = f" (na bazie {n_analysts} analityków)" if isinstance(n_analysts, (int, float)) else ""
+        lines.append(f"Konsensus analityków: {rec}{extra}.")
+    target = _num("Cena docelowa (analitycy)")
+    if target is not None and price is not None and price > 0:
+        upside = round((target - price) / price * 100, 1)
+        kierunek = "powyżej" if upside > 0 else "poniżej"
+        lines.append(f"Średnia cena docelowa {target} — {abs(upside)}% {kierunek} obecnej ceny.")
+    beta = _num("Beta")
+    if beta is not None:
+        charakter = "bardziej zmienna niż rynek" if beta > 1.2 else ("mniej zmienna/defensywna" if beta < 0.8 else "podobna zmienność do rynku")
+        lines.append(f"Beta {beta} — {charakter}.")
     n_flags = row.get("Liczba flag", 0)
     if isinstance(n_flags, (int, float)) and n_flags > 0:
-        lines.append(f"⚠️ **Wykryto {int(n_flags)} czerwoną/e flagę/i** — sprawdź szczegóły niżej.")
+        lines.append(f"⚠️ Wykryto {int(n_flags)} czerwoną/e flagę/i — sprawdź szczegóły niżej.")
     else:
         lines.append("✅ Brak wykrytych automatycznych ostrzeżeń (czerwonych flag).")
 
-    return lines
+    # --- Podsumowanie strategii --------------------------------------------------
+    lines.append("## 🎯 Podsumowanie strategii")
+    scored = []
+    for name, (score_col, _) in STRATEGIES.items():
+        score = row.get(score_col)
+        max_score = STRATEGY_MAX_SCORES.get(score_col)
+        if isinstance(score, (int, float)) and max_score:
+            scored.append((name, score, max_score, round(score / max_score * 100)))
+    if scored:
+        scored.sort(key=lambda x: x[3], reverse=True)
+        best_name, best_score, best_max, best_pct = scored[0]
+        lines.append(f"Najmocniejszy sygnał: **{best_name}** ({best_score}/{best_max} = {best_pct}% maksimum).")
+        for name, score, max_score, pct in scored[1:]:
+            lines.append(f"{name}: {score}/{max_score} ({pct}%).")
+
+    # Usuwa nagłówki sekcji, pod którymi finalnie nie znalazło się nic
+    # (np. spółka bez żadnych danych technicznych) — zamiast pustego nagłówka
+    # wiszącego bez treści.
+    cleaned: list[str] = []
+    for i, line in enumerate(lines):
+        if line.startswith("## "):
+            has_content = i + 1 < len(lines) and not lines[i + 1].startswith("## ")
+            if has_content:
+                cleaned.append(line)
+        else:
+            cleaned.append(line)
+    return cleaned
 
 
 _SUFFIX_MARKET = {
