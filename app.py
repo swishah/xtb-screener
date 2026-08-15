@@ -985,7 +985,10 @@ def render_profile():
     st.divider()
     st.subheader("📋 Brief inwestycyjny")
     for line in generate_brief(row):
-        st.write(f"- {line}")
+        if line.startswith("## "):
+            st.markdown(f"#### {line[3:]}")
+        else:
+            st.write(f"- {line}")
     if row.get("Czerwone flagi", "Brak") != "Brak":
         with st.expander("Zobacz treść czerwonych flag"):
             for f in str(row.get("Czerwone flagi", "")).split("; "):
