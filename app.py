@@ -14,7 +14,7 @@ from core import db  # noqa: E402
 from core.scanner import (  # noqa: E402
     compute_indicators, price_history_for_backtest, get_sp500_map, get_sp400_map,
     STRATEGIES, backtest_strategy, get_fx_rates, get_next_earnings_date, get_ticker_news,
-    generate_brief, STRATEGY_MAX_SCORES,
+    generate_brief, STRATEGY_MAX_SCORES, get_vix_level, compute_sentiment_index, green_flags,
 )
 
 st.set_page_config(page_title="XTB Screener", layout="wide")
@@ -467,6 +467,11 @@ def _ticker_news(ticker: str) -> list[dict]:
     return get_ticker_news(ticker)
 
 
+@st.cache_data(ttl=1800)
+def _vix_level() -> dict | None:
+    return get_vix_level()
+
+
 sp500_map, sp400_map = _us_maps()
 ALL_NAMES = {t: n for g in STOCK_GROUPS.values() for t, n in g.items()}
 ALL_NAMES.update(ETF_MAP)
@@ -485,6 +490,7 @@ MODULE_REGISTRY = [
     ("overview", "🌍 Globalny przegląd"),
     ("dashboard", "🧪 Dashboard (eksperymentalny)"),
     ("sector", "📊 vs Sektor"),
+    ("pe_anomaly", "🎯 Tanie vs Sektor (C/Z)"),
     ("dividends", "💰 Dywidendy"),
     ("custom", "🎛️ Własny scoring"),
     ("watchlist", "⭐ Watchlist"),
@@ -500,6 +506,7 @@ MODULE_DESCRIPTIONS = {
     "overview": "Kondycja całego rynku na raz — szerokość, heatmapy, top ruchy dnia.",
     "dashboard": "Eksperymentalny widok kafelkowy w stylu terminala tradingowego.",
     "sector": "Porównanie spółki z medianą jej sektora — dynamicznie, na żywo.",
+    "pe_anomaly": "Spółki wyraźnie tańsze (C/Z) niż mediana ich sektora, z czerwonymi i zielonymi flagami.",
     "dividends": "Szukanie tanich spółek przed sezonem dywidendowym.",
     "custom": "Własny ranking na bazie wag wskaźników, które sam ustawisz.",
     "watchlist": "Lista obserwowanych spółek z Twoimi notatkami.",
@@ -1140,10 +1147,12 @@ def _tile_header(title: str, note: str = "") -> None:
 def render_dashboard():
     st.warning(
         "🧪 **Tryb eksperymentalny.** Układ inspirowany terminalami tradingowymi. "
-        "Kafelki korzystają WYŁĄCZNIE z danych, które appka już zbiera — bez VIX, "
-        "Fed Funds Rate, Fear & Greed Index, pozycjonowania futures/COT ani danych "
-        "makro. Te wymagałyby dodatkowych, zewnętrznych źródeł danych, których "
-        "appka jeszcze nie integruje — daj znać, jeśli chcesz je dodać."
+        "VIX pochodzi z prawdziwego tickera giełdowego (^VIX) przez Yahoo Finance. "
+        "**Wskaźnik nastrojów poniżej to własna metodologia appki** (VIX + szerokość "
+        "rynku + RSI) — NIE jest to oficjalny CNN Fear & Greed Index, który nie ma "
+        "publicznego API. Dane makro (Fed Funds Rate), pozycjonowanie futures/COT "
+        "i towary wciąż wymagałyby dodatkowych, zewnętrznych źródeł — daj znać, "
+        "jeśli chcesz je dodać."
     )
     dates = db.list_dates()
     if not dates:
@@ -1156,6 +1165,43 @@ def render_dashboard():
         stocks["Rynek"] = "Nieznany"
     if "Sektor" not in stocks.columns:
         stocks["Sektor"] = "Nieznany"
+
+    def _pct_above(col: str):
+        if col not in stocks.columns:
+            return None
+        valid_rows = stocks.dropna(subset=[col, "Cena"])
+        return float((valid_rows["Cena"] > valid_rows[col]).mean() * 100) if not valid_rows.empty else None
+
+    pct_sma20 = _pct_above("SMA20")
+    pct_sma50 = _pct_above("SMA50")
+    pct_sma200 = _pct_above("SMA200")
+    avg_rsi = float(stocks["RSI"].mean()) if "RSI" in stocks.columns and not stocks["RSI"].dropna().empty else None
+    vix = _vix_level()
+    sentiment = compute_sentiment_index(vix["value"] if vix else None, pct_sma50, pct_sma200, avg_rsi)
+
+    vc1, vc2 = st.columns(2)
+    with vc1:
+        with st.container(border=True):
+            _tile_header("😨 VIX (indeks zmienności)", "Yahoo Finance, ticker ^VIX — dane realne")
+            if vix:
+                st.metric("VIX", vix["value"], delta=f"{vix['change_pct']}%" if vix["change_pct"] is not None else None,
+                          delta_color="inverse")
+                if vix["value"] > 30:
+                    st.caption("🔴 Wysoka zmienność — podwyższony niepokój rynku.")
+                elif vix["value"] > 20:
+                    st.caption("🟡 Podwyższona zmienność.")
+                else:
+                    st.caption("🟢 Spokojny rynek.")
+            else:
+                st.caption("Nie udało się pobrać VIX (brak sieci albo Yahoo tymczasowo niedostępne).")
+    with vc2:
+        with st.container(border=True):
+            _tile_header("🎭 Wskaźnik nastrojów (własna metodologia)", "VIX + szerokość rynku + śr. RSI — nie CNN Fear & Greed")
+            if sentiment:
+                st.metric("Wynik (0-100)", sentiment["score"])
+                st.caption(f"**{sentiment['label']}**")
+            else:
+                st.caption("Za mało danych, żeby policzyć wskaźnik.")
 
     row1 = st.columns(3)
     row2 = st.columns(3)
@@ -1206,15 +1252,8 @@ def render_dashboard():
         with st.container(border=True):
             _tile_header("📏 SZEROKOŚĆ RYNKU")
 
-            def _pct_above(col: str):
-                if col not in stocks.columns:
-                    return None
-                valid_rows = stocks.dropna(subset=[col, "Cena"])
-                return float((valid_rows["Cena"] > valid_rows[col]).mean() * 100) if not valid_rows.empty else None
-
             any_data = False
-            for label, col in [("% > SMA20", "SMA20"), ("% > SMA50", "SMA50"), ("% > SMA200", "SMA200")]:
-                pct = _pct_above(col)
+            for label, pct in [("% > SMA20", pct_sma20), ("% > SMA50", pct_sma50), ("% > SMA200", pct_sma200)]:
                 if pct is not None:
                     any_data = True
                     st.write(f"{label}: **{pct:.1f}%**")
@@ -1383,7 +1422,109 @@ def render_sector():
                 )
 
 # ---------------------------------------------------------------------------
-# TAB 7 — Dywidendy: wysoka stopa dywidendy, cena jeszcze nie wzrosła
+# TAB 7 — Tanie vs Sektor: C/Z wyraźnie niższe niż mediana sektora + flagi
+# ---------------------------------------------------------------------------
+def render_pe_anomaly():
+    st.write(
+        "Szuka spółek, których **C/Z (P/E) jest wyraźnie niższe niż mediana ich "
+        "własnego sektora** w bieżącej migawce — czyli potencjalnie tanie na tle "
+        "bezpośrednich konkurentów, nie całego rynku. Razem z automatycznymi "
+        "czerwonymi i zielonymi flagami, żeby odróżnić realną okazję od "
+        "pułapki wartościowej (niskie C/Z, bo rynek słusznie wycenia problemy)."
+    )
+    dates = db.list_dates()
+    if not dates:
+        st.info("Brak danych — uruchom skan.")
+        return
+
+    df = db.load_snapshot(dates[0])
+    stocks = df[df["Typ"] == "stock"].copy()
+    if "Sektor" not in stocks.columns:
+        st.info("Ta migawka nie ma jeszcze danych sektorowych — uruchom skan ponownie po aktualizacji kodu.")
+        return
+
+    stocks = stocks[stocks["Sektor"].notna() & (stocks["Sektor"] != "Nieznany")].copy()
+    stocks["_pe_num"] = pd.to_numeric(stocks.get("C/Z (P/E)"), errors="coerce")
+    # ujemne C/Z (spółka na stracie) psuje sensowność porównania - wykluczamy
+    stocks = stocks[stocks["_pe_num"].notna() & (stocks["_pe_num"] > 0)]
+
+    if stocks.empty:
+        st.info("Brak spółek z dodatnim C/Z i rozpoznanym sektorem w tej migawce.")
+        return
+
+    sector_sizes = stocks.groupby("Sektor")["_pe_num"].size()
+    sector_medians = stocks.groupby("Sektor")["_pe_num"].median()
+    stocks["Mediana C/Z sektora"] = stocks["Sektor"].map(sector_medians).round(2)
+    stocks["Spółek w sektorze"] = stocks["Sektor"].map(sector_sizes)
+    stocks["Różnica vs sektor (%)"] = (
+        (stocks["_pe_num"] - stocks["Mediana C/Z sektora"]) / stocks["Mediana C/Z sektora"] * 100
+    ).round(1)
+
+    c1, c2 = st.columns(2)
+    with c1:
+        min_sector_size = st.slider(
+            "Min. liczba spółek w sektorze", 2, 15, 3,
+            help="Za mało spółek w sektorze = mediana mało wiarygodna.",
+        )
+    with c2:
+        max_diff = st.slider(
+            "Maks. różnica vs mediana sektora (%)", -90, 0, -20,
+            help="Niżej = szukasz spółek jeszcze taniej względem konkurencji.",
+        )
+
+    candidates = stocks[
+        (stocks["Spółek w sektorze"] >= min_sector_size) & (stocks["Różnica vs sektor (%)"] <= max_diff)
+    ].copy()
+    candidates = candidates.sort_values("Różnica vs sektor (%)")
+
+    st.caption(
+        f"Znaleziono **{len(candidates)}** spółek co najmniej {abs(max_diff)}% taniej "
+        "(wg C/Z) niż mediana ich własnego sektora."
+    )
+
+    if candidates.empty:
+        st.info("Żadna spółka nie spełnia obecnych kryteriów — poluzuj suwaki powyżej.")
+        return
+
+    display_cols = [c for c in [
+        "Ticker", "Nazwa", "Rynek", "Sektor", "Cena", "C/Z (P/E)",
+        "Mediana C/Z sektora", "Różnica vs sektor (%)", "Spółek w sektorze",
+        "ROE (%)", "Dług/Kapitał", "Liczba flag", "Buy Score",
+    ] if c in candidates.columns]
+    _render_table(candidates[display_cols], height=500)
+    st.download_button(
+        "⬇️ Pobierz CSV (wszystkie dane)", candidates.to_csv(index=False).encode("utf-8"),
+        file_name=f"tanie_vs_sektor_{dates[0]}.csv",
+    )
+
+    st.divider()
+    st.subheader("🚩🟢 Flagi dla wybranej spółki")
+    pick = st.selectbox(
+        "Spółka", candidates["Ticker"].tolist(),
+        format_func=lambda t: f"{t} — {candidates.set_index('Ticker').loc[t, 'Nazwa']}",
+        key="pe_anomaly_pick",
+    )
+    row = candidates.set_index("Ticker").loc[pick].to_dict()
+    col_r, col_g = st.columns(2)
+    with col_r:
+        st.markdown("**🔴 Czerwone flagi**")
+        flags_text = row.get("Czerwone flagi", "Brak")
+        if flags_text == "Brak" or not flags_text:
+            st.success("Brak ostrzeżeń.")
+        else:
+            for f in str(flags_text).split("; "):
+                st.write(f)
+    with col_g:
+        st.markdown("**🟢 Zielone flagi**")
+        greens = green_flags(row)
+        if not greens:
+            st.caption("Brak wykrytych mocnych stron w automatycznej analizie.")
+        else:
+            for f in greens:
+                st.write(f)
+
+# ---------------------------------------------------------------------------
+# TAB 8 — Dywidendy: wysoka stopa dywidendy, cena jeszcze nie wzrosła
 # ---------------------------------------------------------------------------
 def render_dividends():
     st.write(
@@ -1472,7 +1613,7 @@ def render_dividends():
         )
 
 # ---------------------------------------------------------------------------
-# TAB 8 — Własny scoring: kreator wag zamiast sztywnych strategii
+# TAB 9 — Własny scoring: kreator wag zamiast sztywnych strategii
 # ---------------------------------------------------------------------------
 # (label, kolumna, kierunek "higher"/"lower" = co jest lepsze, domyślna waga)
 CUSTOM_COMPONENTS = [
@@ -1589,7 +1730,7 @@ def render_custom():
                         _render_table(cw_bt, height=300)
 
 # ---------------------------------------------------------------------------
-# TAB 9 — Watchlist: oznaczone tickery z własnymi notatkami
+# TAB 10 — Watchlist: oznaczone tickery z własnymi notatkami
 # ---------------------------------------------------------------------------
 def render_watchlist():
     st.write(
@@ -1673,7 +1814,7 @@ def render_watchlist():
                 st.rerun()
 
 # ---------------------------------------------------------------------------
-# TAB 10 — Backtest strategii: czy TOP N wg danego score'a faktycznie zarabia?
+# TAB 11 — Backtest strategii: czy TOP N wg danego score'a faktycznie zarabia?
 # ---------------------------------------------------------------------------
 def render_bt_strategy():
     st.write(
@@ -1736,7 +1877,7 @@ def render_bt_strategy():
             _render_table(bt_result, height=400)
 
 # ---------------------------------------------------------------------------
-# TAB 11 — Backtest: jak wyglądała spółka X dni/tygodni/miesięcy temu
+# TAB 12 — Backtest: jak wyglądała spółka X dni/tygodni/miesięcy temu
 # ---------------------------------------------------------------------------
 def render_backtest():
     ticker = st.selectbox("Spółka / ETF", sorted(ALL_NAMES.keys()),
@@ -1798,12 +1939,63 @@ RENDER_FUNCS = {
     "overview": render_overview,
     "dashboard": render_dashboard,
     "sector": render_sector,
+    "pe_anomaly": render_pe_anomaly,
     "dividends": render_dividends,
     "custom": render_custom,
     "watchlist": render_watchlist,
     "bt_strategy": render_bt_strategy,
     "backtest": render_backtest,
 }
+
+
+def _render_global_indicators_banner() -> None:
+    """
+    Pasek z VIX-em i wskaźnikiem nastrojów widoczny NAD zakładkami — czyli
+    zawsze, niezależnie od tego, który moduł akurat oglądasz (Streamlit
+    renderuje wszystko przed st.tabs() raz, poza samymi zakładkami).
+    """
+    vix = _vix_level()
+    sentiment = None
+    dates = db.list_dates()
+    if dates:
+        latest = db.load_snapshot(dates[0])
+        stocks = latest[latest["Typ"] == "stock"] if "Typ" in latest.columns else latest
+
+        def _pct_above(col: str):
+            if col not in stocks.columns:
+                return None
+            valid = stocks.dropna(subset=[col, "Cena"])
+            return float((valid["Cena"] > valid[col]).mean() * 100) if not valid.empty else None
+
+        pct_sma50, pct_sma200 = _pct_above("SMA50"), _pct_above("SMA200")
+        avg_rsi = float(stocks["RSI"].mean()) if "RSI" in stocks.columns and not stocks["RSI"].dropna().empty else None
+        sentiment = compute_sentiment_index(vix["value"] if vix else None, pct_sma50, pct_sma200, avg_rsi)
+
+    with st.container(border=True):
+        bc1, bc2, bc3 = st.columns([1, 1, 3])
+        with bc1:
+            if vix:
+                st.metric(
+                    "😨 VIX", vix["value"],
+                    delta=f"{vix['change_pct']}%" if vix["change_pct"] is not None else None,
+                    delta_color="inverse",
+                )
+            else:
+                st.caption("😨 VIX: niedostępny")
+        with bc2:
+            if sentiment:
+                st.metric("🎭 Nastroje", f"{sentiment['score']}/100")
+            else:
+                st.caption("🎭 Nastroje: brak danych")
+        with bc3:
+            st.caption(
+                (f"**{sentiment['label']}** — " if sentiment else "")
+                + "własna metodologia (VIX + szerokość rynku + śr. RSI), nie oficjalny CNN Fear & Greed. "
+                "Pełne szczegóły w zakładce 🧪 Dashboard."
+            )
+
+
+_render_global_indicators_banner()
 
 active_modules = [(key, label) for key, label in MODULE_REGISTRY if key in selected_modules]
 streamlit_tabs = st.tabs([label for _, label in active_modules])
