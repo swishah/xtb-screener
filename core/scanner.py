@@ -609,6 +609,105 @@ def red_flags(row: dict) -> list[str]:
     return flags
 
 
+def green_flags(row: dict) -> list[str]:
+    """
+    Pozytywne sygnały jakości/bezpieczeństwa spółki — dopełnienie red_flags().
+    Pomaga odróżnić realną okazję (niskie C/Z, ale zdrowy biznes) od pułapki
+    wartościowej (niskie C/Z, bo rynek słusznie wycenia problemy).
+    """
+    flags: list[str] = []
+
+    roe = row.get("ROE (%)")
+    if isinstance(roe, (int, float)) and roe > 15:
+        flags.append(f"🟢 Wysokie ROE ({roe}%)")
+
+    op_margin = row.get("Marża Operac. (%)")
+    if isinstance(op_margin, (int, float)) and op_margin > 15:
+        flags.append(f"🟢 Solidna marża operacyjna ({op_margin}%)")
+
+    debt = row.get("Dług/Kapitał")
+    if isinstance(debt, (int, float)) and debt < 50:
+        flags.append(f"🟢 Niskie zadłużenie (dług/kapitał {debt}%)")
+
+    rev_growth = row.get("Wzrost przychodów (%)")
+    if isinstance(rev_growth, (int, float)) and rev_growth > 5:
+        flags.append(f"🟢 Rosnące przychody (+{rev_growth}%)")
+
+    eps_growth = row.get("Wzrost EPS (%)")
+    if isinstance(eps_growth, (int, float)) and eps_growth > 5:
+        flags.append(f"🟢 Rosnący zysk na akcję (+{eps_growth}%)")
+
+    years = row.get("Lata z dywidendą (3Y)")
+    if isinstance(years, (int, float)) and years >= 3:
+        flags.append("🟢 Nieprzerwana dywidenda przez ostatnie 3 lata")
+
+    if row.get("Liczba flag", 1) == 0:
+        flags.append("🟢 Zero czerwonych flag ostrzegawczych")
+
+    return flags
+
+
+def get_vix_level() -> dict | None:
+    """
+    Bieżący poziom VIX (indeks zmienności) — prawdziwy ticker giełdowy (^VIX)
+    dostępny przez Yahoo Finance dokładnie tak samo, jak każda inna spółka
+    w tym projekcie. Zwraca None, gdy się nie uda (np. brak sieci).
+    """
+    try:
+        tk = yf.Ticker("^VIX")
+        hist = tk.history(period="5d")
+        closes = hist["Close"].dropna()
+        if closes.empty:
+            return None
+        current = float(closes.iloc[-1])
+        prev = float(closes.iloc[-2]) if len(closes) > 1 else current
+        change_pct = round(((current - prev) / prev) * 100, 2) if prev else None
+        return {"value": round(current, 2), "change_pct": change_pct}
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def compute_sentiment_index(
+    vix_value: float | None, pct_above_sma50: float | None,
+    pct_above_sma200: float | None, avg_rsi: float | None,
+) -> dict | None:
+    """
+    Własny wskaźnik nastrojów rynkowych (0-100), inspirowany logiką znanego
+    Fear & Greed Index, ale liczony WYŁĄCZNIE z danych, które appka faktycznie
+    ma: VIX z Yahoo Finance + szerokość rynku (SMA50/200) + średnie RSI
+    z bieżącej migawki. To NIE jest oficjalny wskaźnik CNN Fear & Greed —
+    ten nie ma publicznego, oficjalnego API, więc świadomie nie próbujemy go
+    naśladować pod tą samą nazwą.
+    """
+    components: list[float] = []
+    if vix_value is not None:
+        # niski VIX (~10) = spokój/chciwość, wysoki (~40) = strach — skala odwrotna
+        vix_score = max(0.0, min(100.0, 100 - (vix_value - 10) * (100 / 30)))
+        components.append(vix_score)
+    if pct_above_sma50 is not None:
+        components.append(pct_above_sma50)
+    if pct_above_sma200 is not None:
+        components.append(pct_above_sma200)
+    if avg_rsi is not None:
+        components.append(avg_rsi)
+
+    if not components:
+        return None
+
+    score = round(sum(components) / len(components))
+    if score < 25:
+        label = "Ekstremalny strach"
+    elif score < 45:
+        label = "Strach"
+    elif score < 55:
+        label = "Neutralnie"
+    elif score < 75:
+        label = "Chciwość"
+    else:
+        label = "Ekstremalna chciwość"
+    return {"score": score, "label": label}
+
+
 def _to_timestamp(val) -> pd.Timestamp | None:
     """Bezpiecznie zamienia epoch (sekundy) albo string/datetime na pd.Timestamp."""
     if val is None:
