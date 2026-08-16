@@ -15,6 +15,7 @@ from core.scanner import (  # noqa: E402
     compute_indicators, price_history_for_backtest, get_sp500_map, get_sp400_map,
     STRATEGIES, backtest_strategy, get_fx_rates, get_next_earnings_date, get_ticker_news,
     generate_brief, STRATEGY_MAX_SCORES, get_vix_level, compute_sentiment_index, green_flags,
+    compute_stockrank, compute_snowflake, compute_correlation_matrix, get_insider_transactions,
 )
 
 st.set_page_config(page_title="XTB Screener", layout="wide")
@@ -428,6 +429,38 @@ def _render_table(df: pd.DataFrame, height: int = 600) -> None:
         st.dataframe(df, use_container_width=True, height=height, column_config=config)
 
 
+def _render_radar_chart(labels: list[str], values: list[float]) -> None:
+    """
+    Wykres radarowy ('Snowflake') — wartości 0-100 na każdej osi. Tło wykresu
+    jest celowo białe/nieprzezroczyste (nie przezroczyste), żeby tekst i osie
+    były czytelne niezależnie od jasnego/ciemnego motywu Streamlita.
+    """
+    try:
+        import matplotlib.pyplot as plt
+    except Exception:  # noqa: BLE001
+        st.info("Wykres radarowy niedostępny (brak matplotlib).")
+        return
+
+    n = len(labels)
+    angles = [i / n * 2 * np.pi for i in range(n)]
+    angles += angles[:1]
+    vals = [0 if v is None or pd.isna(v) else float(v) for v in values]
+    vals += vals[:1]
+
+    fig, ax = plt.subplots(figsize=(4, 4), subplot_kw=dict(polar=True))
+    ax.set_theta_offset(np.pi / 2)
+    ax.set_theta_direction(-1)
+    ax.set_ylim(0, 100)
+    ax.set_xticks(angles[:-1])
+    ax.set_xticklabels(labels, fontsize=8)
+    ax.set_yticks([25, 50, 75])
+    ax.set_yticklabels(["25", "50", "75"], fontsize=6)
+    ax.plot(angles, vals, linewidth=2, color="#2ecc71")
+    ax.fill(angles, vals, color="#2ecc71", alpha=0.3)
+    st.pyplot(fig, use_container_width=False)
+    plt.close(fig)
+
+
 # (kolumna, kierunek "higher"/"lower" = co jest lepiej) — używane do dynamicznego
 # porównania spółki z medianą JEJ WŁASNEGO sektora w bieżącej migawce.
 SECTOR_METRICS: list[tuple[str, str]] = [
@@ -691,6 +724,14 @@ if not selected_modules:
 # ---------------------------------------------------------------------------
 # TAB 1 — Screener na bazie ostatniej zapisanej migawki
 # ---------------------------------------------------------------------------
+GURU_SCREENS = {
+    "💎 Głębokie przeceny, zero ostrzeżeń": {"typ": "stock", "min_score": 3, "max_ath": -30, "max_flags": 0},
+    "🚀 Mocny sygnał techniczny": {"typ": "stock", "min_score": 6, "max_ath": 0, "max_flags": 3},
+    "🛡️ Najbezpieczniejsze (0 flag)": {"typ": "stock", "min_score": 0, "max_ath": 0, "max_flags": 0},
+    "🌍 Tylko ETF-y": {"typ": "etf", "min_score": 0, "max_ath": 0, "max_flags": 10},
+}
+
+
 def render_screener():
     dates = db.list_dates()
     if not dates:
@@ -722,7 +763,7 @@ def render_screener():
         row1_col1, row1_col2, row1_col3 = st.columns(3)
         with row1_col1:
             typ_options = ["Wszystkie"] + sorted(df["Typ"].dropna().unique().tolist())
-            kind_choice = st.selectbox("Typ", typ_options, index=0)
+            kind_choice = st.selectbox("Typ", typ_options, index=0, key="scr_typ")
 
         pool = df if kind_choice == "Wszystkie" else df[df["Typ"] == kind_choice]
 
@@ -743,14 +784,46 @@ def render_screener():
 
         row2_col1, row2_col2, row2_col3 = st.columns(3)
         with row2_col1:
-            min_score = st.slider("Min. Buy Score", 0, 9, 0)
+            min_score = st.slider("Min. Buy Score", 0, 9, 0, key="scr_min_score")
         with row2_col2:
-            max_ath = st.slider("Maks. % od ATH (np. -30 = co najmniej -30%)", -90, 0, 0)
+            max_ath = st.slider("Maks. % od ATH (np. -30 = co najmniej -30%)", -90, 0, 0, key="scr_max_ath")
         with row2_col3:
             max_flags = st.slider(
-                "Maks. liczba czerwonych flag", 0, 10, 10,
+                "Maks. liczba czerwonych flag", 0, 10, 10, key="scr_max_flags",
                 help="0 = pokaż tylko spółki bez żadnych automatycznych ostrzeżeń.",
             )
+
+        with st.expander("📚 Gotowe przesiewy (Guru Screens) i zapisane własne", expanded=False):
+            st.caption(
+                "Gotowe kombinacje inspirowane popularnymi strategiami (Finviz/GuruFocus). "
+                "Bardziej złożone strategie (np. Magic Formula, Net-Net Graham) lepiej "
+                "sprawdzisz w zakładkach 'Własny scoring' i 'vs Sektor'."
+            )
+            saved_screens = db.get_preference("saved_screens", {})
+            all_screens = {**GURU_SCREENS, **saved_screens}
+            load_pick = st.selectbox(
+                "Wczytaj przesiew", ["— wybierz —"] + list(all_screens.keys()), key="scr_load_screen",
+            )
+            if load_pick != "— wybierz —" and st.button("📥 Wczytaj", key="scr_load_btn"):
+                cfg = all_screens[load_pick]
+                st.session_state["scr_typ"] = cfg["typ"]
+                st.session_state["scr_min_score"] = cfg["min_score"]
+                st.session_state["scr_max_ath"] = cfg["max_ath"]
+                st.session_state["scr_max_flags"] = cfg["max_flags"]
+                st.rerun()
+
+            sc1, sc2 = st.columns([3, 1])
+            with sc1:
+                save_name = st.text_input("Nazwa dla obecnych ustawień filtrów", key="scr_save_name")
+            with sc2:
+                st.write("")
+                if st.button("💾 Zapisz", key="scr_save_btn") and save_name:
+                    saved_screens[save_name] = {
+                        "typ": kind_choice, "min_score": min_score,
+                        "max_ath": max_ath, "max_flags": max_flags,
+                    }
+                    db.set_preference("saved_screens", saved_screens)
+                    st.success(f"Zapisano przesiew „{save_name}”.")
 
         filtered = pool2.copy()
         if sector_choice != "Wszystkie" and "Sektor" in filtered.columns:
@@ -856,6 +929,12 @@ STRATEGY_DESCRIPTIONS = {
         "przed nimi ('sezon dywidendowy' wciąż w toku). Plus sprawdzone payout "
         "ratio i wzrost przychodów, żeby odróżnić okazję od pułapki dywidendowej."
     ),
+    "Jakość fundamentalna (F-Score uproszczony)": (
+        "Inspirowane Piotroski F-Score, ale liczone WYŁĄCZNIE na bieżącym stanie "
+        "(bez porównań rok-do-roku z pełnych sprawozdań — to spowolniłoby skan "
+        "~1300+ spółek). Sprawdza 8 sygnałów jakości: ROA, przepływy operacyjne, "
+        "ROE, marża netto, wzrost EPS/przychodów, zadłużenie, marża brutto."
+    ),
 }
 STRATEGY_COLUMNS = {
     "Deep Value (spadki od ATH)": [
@@ -875,6 +954,11 @@ STRATEGY_COLUMNS = {
         "Dyw. w poprzednim roku", "Dyw. w tym roku", "Przyszła dywidenda",
         "Zmiana ceny (1Y%)", "Payout ratio (%)", "Wzrost przychodów (%)",
         "Marża netto (%)", "Liczba flag",
+    ],
+    "Jakość fundamentalna (F-Score uproszczony)": [
+        "Ticker", "Nazwa", "Rynek", "Cena", "ROA (%)", "Przepływy operacyjne (mln)",
+        "ROE (%)", "Marża netto (%)", "Wzrost EPS (%)", "Wzrost przychodów (%)",
+        "Dług/Kapitał", "Marża brutto (%)", "Liczba flag",
     ],
 }
 
@@ -1015,6 +1099,53 @@ def render_profile():
             "% maksimum": pct,
         })
     _render_table(pd.DataFrame(strategy_rows), height=200)
+
+    stocks_universe = df[df["Typ"] == "stock"].copy()
+    is_stock = row.get("Typ") == "stock" and ticker in stocks_universe["Ticker"].values
+
+    if is_stock:
+        st.divider()
+        st.subheader("🎯 StockRank: Quality / Value / Momentum")
+        st.caption(
+            "Percentyl (0-100) na tle CAŁEGO zeskanowanego uniwersum akcji w tej migawce "
+            "— inspirowane Stockopedia StockRanks."
+        )
+        ranked = compute_stockrank(stocks_universe)
+        rr = ranked[ranked["Ticker"] == ticker].iloc[0]
+        rc1, rc2, rc3 = st.columns(3)
+        rc1.metric("Quality", f"{rr['Quality']:.0f}" if pd.notna(rr.get("Quality")) else "BRAK")
+        rc2.metric("Value", f"{rr['Value']:.0f}" if pd.notna(rr.get("Value")) else "BRAK")
+        rc3.metric("Momentum", f"{rr['Momentum']:.0f}" if pd.notna(rr.get("Momentum")) else "BRAK")
+
+        st.divider()
+        st.subheader("🌸 Profil Snowflake")
+        st.caption(
+            "5-osiowy profil (inspirowany Simply Wall St) — każda oś to percentyl na tle "
+            "reszty uniwersum. Duży, wypełniony obszar = mocna spółka na wielu frontach naraz."
+        )
+        snow = compute_snowflake(stocks_universe)
+        sr = snow[snow["Ticker"] == ticker].iloc[0]
+        axis_labels = ["Wycena", "Wzrost", "Wyniki", "Zdrowie", "Dywidendy"]
+        axis_values = [
+            sr.get("Snowflake: Wycena"), sr.get("Snowflake: Wzrost"), sr.get("Snowflake: Wyniki"),
+            sr.get("Snowflake: Zdrowie"), sr.get("Snowflake: Dywidendy"),
+        ]
+        _render_radar_chart(axis_labels, axis_values)
+
+        st.divider()
+        st.subheader("👔 Transakcje insiderów")
+        st.caption(
+            "Na żądanie, z Yahoo Finance. Pokrycie tych danych bywa znacznie lepsze dla "
+            "spółek notowanych w USA niż europejskich — pusty wynik może po prostu "
+            "oznaczać brak danych źródłowych, nie błąd."
+        )
+        if st.button("Sprawdź transakcje insiderów", key="profile_insider_btn"):
+            with st.spinner("Pobieram dane z Yahoo Finance..."):
+                transactions = get_insider_transactions(ticker)
+            if not transactions:
+                st.info("Brak dostępnych danych o transakcjach insiderów dla tej spółki.")
+            else:
+                _render_table(pd.DataFrame(transactions), height=300)
 
     st.divider()
     st.subheader("📚 Wszystkie dane, wg kategorii")
@@ -1812,6 +1943,24 @@ def render_watchlist():
                 db.remove_from_watchlist(remove_ticker)
                 st.success(f"Usunięto {remove_ticker}.")
                 st.rerun()
+
+        st.divider()
+        st.subheader("🔗 Macierz korelacji")
+        st.caption(
+            "Sprawdza, czy obserwowane spółki poruszają się razem (ryzyko koncentracji) "
+            "czy niezależnie (dywersyfikacja) — liczone z dziennych zwrotów cen. "
+            "Wartości blisko 1.0 = mocno skorelowane, blisko 0 = niezależne, ujemne = "
+            "poruszają się przeciwnie do siebie."
+        )
+        if len(wl) < 2:
+            st.info("Potrzeba co najmniej 2 spółek na watchliście, żeby policzyć korelację.")
+        elif st.button("Oblicz macierz korelacji", key="wl_corr_btn"):
+            with st.spinner("Pobieram historię cen i liczę korelacje..."):
+                corr = compute_correlation_matrix(wl["Ticker"].tolist())
+            if corr.empty:
+                st.warning("Nie udało się pobrać wystarczających danych cenowych dla tych spółek.")
+            else:
+                _render_table(corr.reset_index().rename(columns={"index": "Ticker"}), height=min(400, 60 + 40 * len(corr)))
 
 # ---------------------------------------------------------------------------
 # TAB 11 — Backtest strategii: czy TOP N wg danego score'a faktycznie zarabia?
