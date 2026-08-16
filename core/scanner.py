@@ -297,11 +297,51 @@ def dividend_opportunity_score(row: dict) -> int:
     return pts
 
 
+def piotroski_lite_score(row: dict) -> int:
+    """
+    Uproszczony, zaadaptowany F-Score Piotroskiego. UWAGA: prawdziwy Piotroski
+    F-Score (9 pkt) porównuje wskaźniki ROK DO ROKU (np. czy dźwignia spadła,
+    czy płynność wzrosła) na bazie pełnych sprawozdań finansowych. Pobieranie
+    tego dla ~1300+ tickerów podczas codziennego skanu wymagałoby 3 dodatkowych
+    zapytań API na spółkę i znacząco wydłużyłoby skan, więc świadomie
+    rezygnujemy z tego na rzecz wersji opartej WYŁĄCZNIE na danych z bieżącego
+    stanu (już pobieranych) — sprawdza jakość i rentowność biznesu punktowo,
+    nie trend. Traktuj jako 'jakość fundamentalna', nie dosłowny F-Score.
+    """
+    pts = 0
+    roa = row.get("ROA (%)")
+    if isinstance(roa, (int, float)) and roa > 0:
+        pts += 1
+    cfo = row.get("Przepływy operacyjne (mln)")
+    if isinstance(cfo, (int, float)) and cfo > 0:
+        pts += 1
+    roe = row.get("ROE (%)")
+    if isinstance(roe, (int, float)) and roe > 0:
+        pts += 1
+    net_margin = row.get("Marża netto (%)")
+    if isinstance(net_margin, (int, float)) and net_margin > 0:
+        pts += 1
+    eps_growth = row.get("Wzrost EPS (%)")
+    if isinstance(eps_growth, (int, float)) and eps_growth > 0:
+        pts += 1
+    rev_growth = row.get("Wzrost przychodów (%)")
+    if isinstance(rev_growth, (int, float)) and rev_growth > 0:
+        pts += 1
+    debt = row.get("Dług/Kapitał")
+    if isinstance(debt, (int, float)) and debt < 100:
+        pts += 1
+    gross_margin = row.get("Marża brutto (%)")
+    if isinstance(gross_margin, (int, float)) and gross_margin > 20:
+        pts += 1
+    return pts
+
+
 STRATEGIES = {
     "Deep Value (spadki od ATH)": ("Score: Deep Value", deep_value_score),
     "Momentum": ("Score: Momentum", momentum_score),
     "Dywidendowa": ("Score: Dywidendowa", dividend_score),
     "Dywidenda-okazja (sezon dywidendowy)": ("Score: Dywidenda-Okazja", dividend_opportunity_score),
+    "Jakość fundamentalna (F-Score uproszczony)": ("Score: F-Score Lite", piotroski_lite_score),
 }
 
 # Maksymalne teoretyczne wartości każdego score'a — zweryfikowane empirycznie
@@ -313,6 +353,7 @@ STRATEGY_MAX_SCORES = {
     "Score: Momentum": 8,
     "Score: Dywidendowa": 7,
     "Score: Dywidenda-Okazja": 13,
+    "Score: F-Score Lite": 8,
 }
 
 
@@ -781,6 +822,11 @@ def analyze_ticker(ticker: str, full_name: str, kind: str = "stock") -> dict | N
         "Rekomendacja analityków": recommendation,
         "Liczba analityków": analyst_count,
         "% udziałów instytucji": _safe_get(info, "heldPercentInstitutions", is_pct=True) or "BRAK",
+        "ROA (%)": _safe_get(info, "returnOnAssets", is_pct=True) or "BRAK",
+        "Przepływy operacyjne (mln)": (
+            round(info.get("operatingCashflow") / 1e6, 1)
+            if isinstance(info.get("operatingCashflow"), (int, float)) else "BRAK"
+        ),
     }
 
     # Zmiana ceny w ostatnim roku — kluczowe dla strategii "wysoka dywidenda,
@@ -927,6 +973,137 @@ def get_ticker_news(ticker: str, limit: int = 6) -> list[dict]:
 
         results.append({"title": title, "publisher": publisher, "link": link, "date": date_str})
     return results
+
+
+def get_insider_transactions(ticker: str, limit: int = 8) -> list[dict]:
+    """
+    Ostatnie transakcje insiderów (zarząd/rada/duzi akcjonariusze) z Yahoo
+    Finance — na żądanie, nie podczas skanu. UWAGA: pokrycie tych danych przez
+    Yahoo jest zwykle znacznie lepsze dla spółek notowanych w USA niż
+    europejskich — dla wielu tickerów z tego projektu może zwrócić pustą listę,
+    co nie jest błędem, tylko brakiem danych źródłowych.
+    """
+    try:
+        tk = yf.Ticker(ticker)
+        raw = tk.get_insider_transactions()
+    except Exception:  # noqa: BLE001
+        return []
+    if raw is None or raw.empty:
+        return []
+
+    results: list[dict] = []
+    for _, row in raw.head(limit).iterrows():
+        d = row.to_dict()
+        date_val = d.get("Start Date") or d.get("Date")
+        date_str = None
+        if date_val is not None:
+            try:
+                date_str = pd.Timestamp(date_val).strftime("%Y-%m-%d")
+            except Exception:  # noqa: BLE001
+                date_str = str(date_val)
+        results.append({
+            "date": date_str,
+            "insider": d.get("Insider") or d.get("Filer Name") or "Nieznany",
+            "relation": d.get("Position") or d.get("Filer Relation") or "",
+            "transaction": d.get("Transaction") or d.get("Transaction Description") or "",
+            "shares": d.get("Shares"),
+            "value": d.get("Value"),
+        })
+    return results
+
+
+def compute_stockrank(stocks: pd.DataFrame) -> pd.DataFrame:
+    """
+    Dodaje trzy kolumny percentylowe (0-100, względem przekazanego zbioru
+    spółek) inspirowane Stockopedia StockRanks: Quality, Value, Momentum.
+    Liczone NA ŻYWO na dostarczonym zbiorze (nie zapisywane w migawce) —
+    percentyle są więc zawsze względne do tego, co akurat porównujesz
+    (np. cały rynek vs tylko jeden sektor dadzą różne wyniki).
+    """
+    df = stocks.copy()
+
+    def _rank(col: str, higher_better: bool = True) -> pd.Series | None:
+        if col not in df.columns:
+            return None
+        numeric = pd.to_numeric(df[col], errors="coerce")
+        if numeric.dropna().empty:
+            return None
+        return numeric.rank(pct=True, ascending=higher_better) * 100
+
+    def _combine(components: list[tuple[str, bool]]) -> pd.Series | None:
+        ranks = [r for r in (_rank(col, higher) for col, higher in components) if r is not None]
+        if not ranks:
+            return None
+        return pd.concat(ranks, axis=1).mean(axis=1).round(0)
+
+    df["Quality"] = _combine([
+        ("ROE (%)", True), ("Marża Operac. (%)", True), ("Marża netto (%)", True),
+        ("Dług/Kapitał", False), ("ROA (%)", True),
+    ])
+    df["Value"] = _combine([
+        ("C/Z (P/E)", False), ("C/WK (P/B)", False), ("Forward C/Z", False), ("Stopa Dyw. (%)", True),
+    ])
+    df["Momentum"] = _combine([
+        ("RSI", True), ("volume_ratio", True), ("pct_from_ath", True), ("Zmiana ceny (1Y%)", True),
+    ])
+    return df
+
+
+def compute_snowflake(stocks: pd.DataFrame) -> pd.DataFrame:
+    """
+    5-osiowy profil spółki (inspirowany 'Snowflake' z Simply Wall St): Wycena,
+    Wzrost, Wyniki historyczne, Zdrowie finansowe, Dywidendy — każda oś 0-100,
+    percentylowo względem przekazanego zbioru spółek (ta sama metodologia co
+    compute_stockrank, tylko więcej, węższych osi pod wykres radarowy).
+    """
+    df = stocks.copy()
+
+    def _rank(col: str, higher_better: bool = True) -> pd.Series | None:
+        if col not in df.columns:
+            return None
+        numeric = pd.to_numeric(df[col], errors="coerce")
+        if numeric.dropna().empty:
+            return None
+        return numeric.rank(pct=True, ascending=higher_better) * 100
+
+    def _combine(components: list[tuple[str, bool]]) -> pd.Series | None:
+        ranks = [r for r in (_rank(col, higher) for col, higher in components) if r is not None]
+        if not ranks:
+            return None
+        return pd.concat(ranks, axis=1).mean(axis=1).round(0)
+
+    df["Snowflake: Wycena"] = _combine([("C/Z (P/E)", False), ("C/WK (P/B)", False), ("Forward C/Z", False)])
+    df["Snowflake: Wzrost"] = _combine([("Wzrost przychodów (%)", True), ("Wzrost EPS (%)", True)])
+    df["Snowflake: Wyniki"] = _combine([("Zmiana ceny (1Y%)", True), ("pct_from_ath", True)])
+    df["Snowflake: Zdrowie"] = _combine([
+        ("Dług/Kapitał", False), ("ROA (%)", True), ("Score: F-Score Lite", True),
+    ])
+    df["Snowflake: Dywidendy"] = _combine([
+        ("Stopa Dyw. (%)", True), ("Lata z dywidendą (3Y)", True), ("Payout ratio (%)", False),
+    ])
+    return df
+
+
+def compute_correlation_matrix(tickers: list[str]) -> pd.DataFrame:
+    """
+    Macierz korelacji dziennych zwrotów dla podanych tickerów (np. z
+    Watchlisty) — liczona z historii cen, którą i tak już pobieramy do
+    backtestu pojedynczej spółki. Ticker, dla którego nie uda się pobrać
+    danych, jest pomijany bez wywalania reszty.
+    """
+    returns: dict[str, pd.Series] = {}
+    for ticker in tickers:
+        try:
+            hist = price_history_for_backtest(ticker)
+            if hist.empty or "Close" not in hist.columns:
+                continue
+            returns[ticker] = hist["Close"].pct_change().dropna()
+        except Exception:  # noqa: BLE001
+            continue
+    if len(returns) < 2:
+        return pd.DataFrame()
+    combined = pd.DataFrame(returns)
+    return combined.corr().round(2)
 
 
 def backtest_strategy(df_all: pd.DataFrame, score_col: str, top_n: int, hold_snapshots: int) -> pd.DataFrame:
