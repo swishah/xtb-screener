@@ -733,6 +733,13 @@ GURU_SCREENS = {
 
 
 def render_screener():
+    if "pending_screen_load" in st.session_state:
+        _cfg = st.session_state.pop("pending_screen_load")
+        st.session_state["scr_typ"] = _cfg["typ"]
+        st.session_state["scr_min_score"] = _cfg["min_score"]
+        st.session_state["scr_max_ath"] = _cfg["max_ath"]
+        st.session_state["scr_max_flags"] = _cfg["max_flags"]
+
     dates = db.list_dates()
     if not dates:
         st.warning(
@@ -805,11 +812,7 @@ def render_screener():
                 "Wczytaj przesiew", ["— wybierz —"] + list(all_screens.keys()), key="scr_load_screen",
             )
             if load_pick != "— wybierz —" and st.button("📥 Wczytaj", key="scr_load_btn"):
-                cfg = all_screens[load_pick]
-                st.session_state["scr_typ"] = cfg["typ"]
-                st.session_state["scr_min_score"] = cfg["min_score"]
-                st.session_state["scr_max_ath"] = cfg["max_ath"]
-                st.session_state["scr_max_flags"] = cfg["max_flags"]
+                st.session_state["pending_screen_load"] = all_screens[load_pick]
                 st.rerun()
 
             sc1, sc2 = st.columns([3, 1])
