@@ -770,13 +770,19 @@ def render_screener():
         row1_col1, row1_col2, row1_col3 = st.columns(3)
         with row1_col1:
             typ_options = ["Wszystkie"] + sorted(df["Typ"].dropna().unique().tolist())
-            kind_choice = st.selectbox("Typ", typ_options, index=0, key="scr_typ")
+            kind_choice = st.selectbox(
+                "Typ", typ_options, index=0, key="scr_typ",
+                help="Czy przeglądasz akcje, ETF-y, czy oba typy naraz.",
+            )
 
         pool = df if kind_choice == "Wszystkie" else df[df["Typ"] == kind_choice]
 
         with row1_col2:
             market_options = ["Wszystkie"] + sorted(pool["Rynek"].dropna().unique().tolist())
-            market_choice = st.selectbox("Rynek / kraj", market_options, index=0)
+            market_choice = st.selectbox(
+                "Rynek / kraj", market_options, index=0,
+                help="Zawęża do jednej giełdy/kraju notowania.",
+            )
 
         pool2 = pool if market_choice == "Wszystkie" else pool[pool["Rynek"] == market_choice]
 
@@ -785,15 +791,27 @@ def render_screener():
                 sector_options = ["Wszystkie"] + sorted(
                     s for s in pool2["Sektor"].dropna().unique().tolist() if s != "Nieznany"
                 )
-                sector_choice = st.selectbox("Sektor", sector_options, index=0)
+                sector_choice = st.selectbox(
+                    "Sektor", sector_options, index=0,
+                    help="Zawęża do jednego sektora gospodarki (klasyfikacja Yahoo Finance).",
+                )
             else:
                 sector_choice = "Wszystkie"
 
         row2_col1, row2_col2, row2_col3 = st.columns(3)
         with row2_col1:
-            min_score = st.slider("Min. Buy Score", 0, 9, 0, key="scr_min_score")
+            min_score = st.slider(
+                "Min. Buy Score", 0, 9, 0, key="scr_min_score",
+                help="Buy Score to suma podstawowych sygnałów technicznych (RSI, MACD, trend, "
+                     "wolumen, dystans od ATH). Wyżej = więcej sygnałów kupna zgadza się naraz. "
+                     "0 = bez filtra.",
+            )
         with row2_col2:
-            max_ath = st.slider("Maks. % od ATH (np. -30 = co najmniej -30%)", -90, 0, 0, key="scr_max_ath")
+            max_ath = st.slider(
+                "Maks. % od ATH (np. -30 = co najmniej -30%)", -90, 0, 0, key="scr_max_ath",
+                help="Ile maksymalnie spółka może być poniżej swojego historycznego szczytu. "
+                     "Np. -30 pokaże tylko spółki co najmniej 30% poniżej ATH.",
+            )
         with row2_col3:
             max_flags = st.slider(
                 "Maks. liczba czerwonych flag", 0, 10, 10, key="scr_max_flags",
@@ -879,7 +897,11 @@ def render_screener():
                         st.write(f)
 
         st.divider()
-        st.subheader("📅 Najbliższe wyniki finansowe (earnings)")
+        st.subheader(
+            "📅 Najbliższe wyniki finansowe (earnings)",
+            help="Data najbliższej publikacji wyników kwartalnych/rocznych. Wyniki blisko dziś "
+                 "= wyższa zmienność, inny kontekst decyzyjny na kupno/sprzedaż.",
+        )
         st.caption(
             "Sprawdzane na żądanie (nie podczas codziennego skanu, żeby go nie spowalniać) "
             "— dla maks. 30 spółek z aktualnie przefiltrowanej tabeli powyżej."
@@ -996,7 +1018,11 @@ def render_strategie():
             _render_table(ranked[display_cols], height=600)
 
         st.divider()
-        st.subheader("🔗 Zbieżność strategii")
+        st.subheader(
+            "🔗 Zbieżność strategii",
+            help="Spółki, które jednocześnie są w czołówce więcej niż jednej strategii — "
+                 "silniejszy, wzajemnie potwierdzony sygnał niż wysoki wynik w tylko jednej.",
+        )
         st.caption(
             "Spółki, które jednocześnie znajdują się w czołówce więcej niż jednej "
             "strategii naraz — silniejszy, wzajemnie potwierdzony sygnał niż wysoki "
@@ -1011,7 +1037,10 @@ def render_strategie():
                 "żeby zbieżność miała sens (potrzeba co najmniej dwóch strategii)."
             )
         else:
-            conv_top_n = st.slider("Próg: TOP N per strategia", 5, 50, 15, key="conv_top_n")
+            conv_top_n = st.slider(
+                "Próg: TOP N per strategia", 5, 50, 15, key="conv_top_n",
+                help="Ile najlepszych spółek per strategia liczy się jako 'w czołówce' przy sprawdzaniu zbieżności.",
+            )
             membership: dict[str, int] = {}
             for name, col in available.items():
                 top_tickers = stocks_df.sort_values(col, ascending=False).head(conv_top_n)["Ticker"]
@@ -1066,20 +1095,29 @@ def render_profile():
     m1, m2, m3, m4 = st.columns(4)
     cena = row.get("Cena")
     waluta = row.get("Waluta", "")
-    m1.metric("Cena", f"{cena} {waluta}" if cena is not None else "BRAK")
+    m1.metric("Cena", f"{cena} {waluta}" if cena is not None else "BRAK",
+              help="Ostatnia cena zamknięcia w walucie notowania spółki.")
     if waluta and waluta != "PLN":
         try:
             rate = _fx_rates((waluta,)).get(waluta)
             if rate and isinstance(cena, (int, float)):
-                m2.metric("Cena (PLN)", f"{round(cena * rate, 2)} PLN")
+                m2.metric("Cena (PLN)", f"{round(cena * rate, 2)} PLN",
+                      help="Cena przeliczona na złote wg bieżącego kursu wymiany (na żywo).")
         except Exception:  # noqa: BLE001
             pass
-    m3.metric("Buy Score", row.get("Buy Score", "BRAK"))
+    m3.metric("Buy Score", row.get("Buy Score", "BRAK"),
+              help="Suma podstawowych sygnałów technicznych kupna (RSI, MACD, trend, wolumen, "
+                   "dystans od ATH). Wyżej = więcej sygnałów zgadza się naraz.")
     n_flags = row.get("Liczba flag", 0)
-    m4.metric("Czerwone flagi", n_flags, delta=None)
+    m4.metric("Czerwone flagi", n_flags, delta=None,
+              help="Liczba automatycznych ostrzeżeń wykrytych w danych spółki. 0 = brak wykrytych problemów.")
 
     st.divider()
-    st.subheader("📋 Brief inwestycyjny")
+    st.subheader(
+        "📋 Brief inwestycyjny",
+        help="Automatyczne, regułowe podsumowanie sytuacji spółki na bazie danych — "
+             "nie porada inwestycyjna, tylko zestawienie faktów.",
+    )
     for line in generate_brief(row):
         if line.startswith("## "):
             st.markdown(f"#### {line[3:]}")
@@ -1091,7 +1129,11 @@ def render_profile():
                 st.write(f)
 
     st.divider()
-    st.subheader("🧭 Wszystkie strategie na raz")
+    st.subheader(
+        "🧭 Wszystkie strategie na raz",
+        help="Wynik i % maksimum dla każdej z 5 strategii naraz — wyżej % = spółka lepiej "
+             "pasuje do danej strategii.",
+    )
     strategy_rows = []
     for name, (score_col, _) in STRATEGIES.items():
         score = row.get(score_col)
@@ -1108,7 +1150,12 @@ def render_profile():
 
     if is_stock:
         st.divider()
-        st.subheader("🎯 StockRank: Quality / Value / Momentum")
+        st.subheader(
+            "🎯 StockRank: Quality / Value / Momentum",
+            help="Quality = jakość biznesu (ROE, marże, dług). Value = atrakcyjność wyceny "
+                 "(niskie C/Z i C/WK, wysoka dywidenda). Momentum = siła trendu (RSI, wolumen, "
+                 "dystans od ATH). Każdy 0-100, percentyl na tle rynku — wyżej zawsze lepiej.",
+        )
         st.caption(
             "Percentyl (0-100) na tle CAŁEGO zeskanowanego uniwersum akcji w tej migawce "
             "— inspirowane Stockopedia StockRanks."
@@ -1116,12 +1163,19 @@ def render_profile():
         ranked = compute_stockrank(stocks_universe)
         rr = ranked[ranked["Ticker"] == ticker].iloc[0]
         rc1, rc2, rc3 = st.columns(3)
-        rc1.metric("Quality", f"{rr['Quality']:.0f}" if pd.notna(rr.get("Quality")) else "BRAK")
-        rc2.metric("Value", f"{rr['Value']:.0f}" if pd.notna(rr.get("Value")) else "BRAK")
-        rc3.metric("Momentum", f"{rr['Momentum']:.0f}" if pd.notna(rr.get("Momentum")) else "BRAK")
+        rc1.metric("Quality", f"{rr['Quality']:.0f}" if pd.notna(rr.get("Quality")) else "BRAK",
+                  help="Percentyl jakości biznesu (ROE, marże, dług) na tle rynku. Wyżej = lepiej.")
+        rc2.metric("Value", f"{rr['Value']:.0f}" if pd.notna(rr.get("Value")) else "BRAK",
+                  help="Percentyl atrakcyjności wyceny (niskie C/Z i C/WK, wysoka dywidenda). Wyżej = taniej.")
+        rc3.metric("Momentum", f"{rr['Momentum']:.0f}" if pd.notna(rr.get("Momentum")) else "BRAK",
+                  help="Percentyl siły trendu (RSI, wolumen, dystans od ATH). Wyżej = silniejszy trend wzrostowy.")
 
         st.divider()
-        st.subheader("🌸 Profil Snowflake")
+        st.subheader(
+            "🌸 Profil Snowflake",
+            help="5 osi po 0-100 (percentyl na tle rynku): Wycena, Wzrost, Wyniki, Zdrowie, "
+                 "Dywidendy. Duży, wypełniony kształt = mocna spółka na wielu frontach naraz.",
+        )
         st.caption(
             "5-osiowy profil (inspirowany Simply Wall St) — każda oś to percentyl na tle "
             "reszty uniwersum. Duży, wypełniony obszar = mocna spółka na wielu frontach naraz."
@@ -1136,7 +1190,11 @@ def render_profile():
         _render_radar_chart(axis_labels, axis_values)
 
         st.divider()
-        st.subheader("👔 Transakcje insiderów")
+        st.subheader(
+            "👔 Transakcje insiderów",
+            help="Zakupy/sprzedaże akcji przez zarząd i dużych akcjonariuszy. Insiderzy kupujący "
+                 "własne akcje bywają uznawani za pozytywny sygnał zaufania do przyszłości spółki.",
+        )
         st.caption(
             "Na żądanie, z Yahoo Finance. Pokrycie tych danych bywa znacznie lepsze dla "
             "spółek notowanych w USA niż europejskich — pusty wynik może po prostu "
@@ -1151,7 +1209,11 @@ def render_profile():
                 _render_table(pd.DataFrame(transactions), height=300)
 
     st.divider()
-    st.subheader("📚 Wszystkie dane, wg kategorii")
+    st.subheader(
+        "📚 Wszystkie dane, wg kategorii",
+        help="Kompletna lista wszystkich zebranych wskaźników dla tej spółki, pogrupowana "
+             "tematycznie — rozwiń kategorię, żeby zobaczyć szczegóły z wyjaśnieniami.",
+    )
     st.caption("Kliknij kategorię, żeby rozwinąć pełną listę wskaźników dla tej spółki.")
     for group_name, group_cols in INDICATOR_GROUPS.items():
         available = [c for c in group_cols if c in row]
@@ -1179,7 +1241,11 @@ def render_overview():
             df["Rynek"] = "Nieznany"
         stocks = df[df["Typ"] == "stock"].copy()
 
-        st.subheader("Szerokość rynku (breadth)")
+        st.subheader(
+            "Szerokość rynku (breadth)",
+            help="Wysoki % spółek nad SMA200 = szeroka hossa (ciągnie wiele spółek naraz). "
+                 "Niski % przy rosnących indeksach = wzrost napędzany tylko kilkoma dużymi spółkami.",
+        )
         c1, c2, c3, c4 = st.columns(4)
 
         def _pct_above(col: str) -> float | None:
@@ -1194,17 +1260,22 @@ def render_overview():
         avg_rsi = float(stocks["RSI"].mean()) if "RSI" in stocks.columns and not stocks["RSI"].isna().all() else None
         buy5 = float((stocks["Buy Score"] >= 5).mean() * 100) if "Buy Score" in stocks.columns else None
 
-        c1.metric("% spółek > SMA200", f"{above200:.0f}%" if above200 is not None else "brak danych")
-        c2.metric("% spółek > SMA50", f"{above50:.0f}%" if above50 is not None else "brak danych")
-        c3.metric("Średnie RSI (cały rynek)", f"{avg_rsi:.1f}" if avg_rsi is not None else "brak danych")
-        c4.metric("% z Buy Score ≥ 5", f"{buy5:.0f}%" if buy5 is not None else "brak danych")
+        c1.metric("% spółek > SMA200", f"{above200:.0f}%" if above200 is not None else "brak danych",
+                  help="Ile % zeskanowanych spółek ma cenę powyżej 200-dniowej średniej — "
+                       "klasyczny wyznacznik długoterminowej hossy/bessy.")
+        c2.metric("% spółek > SMA50", f"{above50:.0f}%" if above50 is not None else "brak danych",
+                  help="Jak wyżej, ale dla średniej 50-dniowej (trend średnioterminowy).")
+        c3.metric("Średnie RSI (cały rynek)", f"{avg_rsi:.1f}" if avg_rsi is not None else "brak danych",
+                  help="Średnie RSI całego rynku. >50 = generalnie trend wzrostowy, <50 = spadkowy.")
+        c4.metric("% z Buy Score ≥ 5", f"{buy5:.0f}%" if buy5 is not None else "brak danych",
+                  help="Ile % spółek ma wysoki Buy Score — więcej = więcej okazji technicznych naraz na rynku.")
         st.caption(
             "Wysoki % spółek nad SMA200 = szeroka hossa (ciągnie wiele spółek naraz). "
             "Niski % przy rosnących indeksach = wzrost napędzany tylko kilkoma dużymi spółkami."
         )
 
-        def _show_heatmap(group_col: str, title: str) -> None:
-            st.subheader(title)
+        def _show_heatmap(group_col: str, title: str, help_text: str) -> None:
+            st.subheader(title, help=help_text)
             if group_col not in stocks.columns:
                 st.info(f"Brak kolumny '{group_col}' w tej migawce.")
                 return
@@ -1234,11 +1305,22 @@ def render_overview():
 
         hm_col1, hm_col2 = st.columns(2)
         with hm_col1:
-            _show_heatmap("Rynek", "Heatmapa rynków")
+            _show_heatmap(
+                "Rynek", "Heatmapa rynków",
+                "Który kraj/giełda ma teraz najwyższy średni Buy Score i największy spadek "
+                "od ATH — szybki obraz, który rynek jest 'przeceniony', a który 'drogi'.",
+            )
         with hm_col2:
-            _show_heatmap("Sektor", "Heatmapa sektorów")
+            _show_heatmap(
+                "Sektor", "Heatmapa sektorów",
+                "Jak wyżej, ale w podziale na sektor gospodarki zamiast kraju notowania.",
+            )
 
-        st.subheader("Rozkład RSI (cały rynek)")
+        st.subheader(
+            "Rozkład RSI (cały rynek)",
+            help="Histogram RSI całego zeskanowanego rynku. Dużo spółek po lewej (RSI<30) = "
+                 "rynek generalnie wyprzedany, dużo po prawej (RSI>70) = wykupiony.",
+        )
         if "RSI" in stocks.columns and not stocks["RSI"].dropna().empty:
             counts, edges = np.histogram(stocks["RSI"].dropna(), bins=10, range=(0, 100))
             hist_df = pd.DataFrame(
@@ -1249,7 +1331,10 @@ def render_overview():
         else:
             st.info("Brak danych RSI do histogramu.")
 
-        st.subheader("Top ruchy dnia")
+        st.subheader(
+            "Top ruchy dnia",
+            help="Największe wzrosty/spadki ceny od poprzedniej migawki (dzień do dnia).",
+        )
         if len(dates) >= 2:
             prev = db.load_snapshot(dates[1])
             merged = df.merge(
@@ -1319,7 +1404,9 @@ def render_dashboard():
             _tile_header("😨 VIX (indeks zmienności)", "Yahoo Finance, ticker ^VIX — dane realne")
             if vix:
                 st.metric("VIX", vix["value"], delta=f"{vix['change_pct']}%" if vix["change_pct"] is not None else None,
-                          delta_color="inverse")
+                          delta_color="inverse",
+                          help="Indeks zmienności S&P500. <20 = spokojny rynek, 20-30 = podwyższona "
+                               "zmienność, >30 = wysoki niepokój/panika.")
                 if vix["value"] > 30:
                     st.caption("🔴 Wysoka zmienność — podwyższony niepokój rynku.")
                 elif vix["value"] > 20:
@@ -1332,7 +1419,11 @@ def render_dashboard():
         with st.container(border=True):
             _tile_header("🎭 Wskaźnik nastrojów (własna metodologia)", "VIX + szerokość rynku + śr. RSI — nie CNN Fear & Greed")
             if sentiment:
-                st.metric("Wynik (0-100)", sentiment["score"])
+                st.metric(
+                    "Wynik (0-100)", sentiment["score"],
+                    help="Własny wskaźnik z VIX + szerokości rynku + RSI. <25 ekstremalny strach, "
+                         "25-45 strach, 45-55 neutralnie, 55-75 chciwość, >75 ekstremalna chciwość.",
+                )
                 st.caption(f"**{sentiment['label']}**")
             else:
                 st.caption("Za mało danych, żeby policzyć wskaźnik.")
@@ -1538,7 +1629,11 @@ def render_sector():
                 st.dataframe(pd.DataFrame(comp_rows), use_container_width=True, height=480, hide_index=True)
 
                 st.divider()
-                st.subheader(f"Wszystkie spółki w sektorze „{sector}”")
+                st.subheader(
+                    f"Wszystkie spółki w sektorze „{sector}”",
+                    help="Pełna lista spółek z tego samego sektora w bieżącej migawce, do "
+                         "bezpośredniego porównania obok siebie.",
+                )
                 default_sector_cols = ["Rynek", "Buy Score"] + [m for m, _ in SECTOR_METRICS]
                 active_sector_cols = _personalize_columns(
                     pref_key="sector_columns",
@@ -1632,7 +1727,12 @@ def render_pe_anomaly():
     )
 
     st.divider()
-    st.subheader("🚩🟢 Flagi dla wybranej spółki")
+    st.subheader(
+        "🚩🟢 Flagi dla wybranej spółki",
+        help="🔴 = automatyczne ostrzeżenia (np. wysoki dług, malejące przychody). 🟢 = "
+             "automatyczne mocne strony (np. wysokie ROE, niski dług). Pomagają ocenić, czy "
+             "niska wycena to okazja czy pułapka wartościowa.",
+    )
     pick = st.selectbox(
         "Spółka", candidates["Ticker"].tolist(),
         format_func=lambda t: f"{t} — {candidates.set_index('Ticker').loc[t, 'Nazwa']}",
@@ -1679,7 +1779,10 @@ def render_dividends():
 
         c1, c2, c3 = st.columns(3)
         with c1:
-            min_yield = st.slider("Min. stopa dywidendy (%)", 0.0, 15.0, 4.0, 0.5)
+            min_yield = st.slider(
+                "Min. stopa dywidendy (%)", 0.0, 15.0, 4.0, 0.5,
+                help="Minimalna stopa dywidendy z ostatniego roku względem obecnej ceny.",
+            )
         with c2:
             max_price_change = st.slider(
                 "Maks. zmiana ceny w ostatnim roku (%)", -50, 100, 15,
@@ -1806,7 +1909,10 @@ def render_custom():
         cw_cols = st.columns(3)
         for i, (label, col, direction, default) in enumerate(CUSTOM_COMPONENTS):
             with cw_cols[i % 3]:
-                weights[col] = st.slider(label, 0, 5, default, key=f"cw_{col}")
+                weights[col] = st.slider(
+                    label, 0, 5, default, key=f"cw_{col}",
+                    help=INDICATOR_HELP.get(col, "0 = pomiń ten wskaźnik całkowicie w Twojej formule."),
+                )
 
         custom_score = _compute_custom_score(stocks, weights)
         if custom_score is None:
@@ -1820,7 +1926,12 @@ def render_custom():
             _render_table(ranked[show_cols], height=600)
 
             st.divider()
-            st.subheader("Backtest własnych wag")
+            st.subheader(
+                "Backtest własnych wag",
+                help="Sprawdza historyczną skuteczność DOKŁADNIE tej kombinacji wag na zapisanych "
+                     "migawkach — wyższy średni zwrot i win rate = lepiej sprawdzająca się "
+                     "formuła w przeszłości.",
+            )
             st.caption(
                 "Sprawdza historyczną skuteczność DOKŁADNIE tej kombinacji wag na "
                 "bazie zapisanych migawek — tak samo jak w zakładce Backtest strategii."
@@ -1831,7 +1942,10 @@ def render_custom():
             else:
                 bc1, bc2 = st.columns(2)
                 with bc1:
-                    cw_top_n = st.slider("TOP N spółek", 1, 20, 5, key="cw_top_n")
+                    cw_top_n = st.slider(
+                    "TOP N spółek", 1, 20, 5, key="cw_top_n",
+                    help="Ile najlepszych spółek wg Twojej formuły 'kupujesz' w każdym oknie testowym.",
+                )
                 with bc2:
                     cw_max_hold = max(1, n_snapshots - 1)
                     if cw_max_hold < 2:
@@ -1839,7 +1953,8 @@ def render_custom():
                         st.caption("Trzymaj przez: 1 skan (za mało migawek na wybór zakresu)")
                     else:
                         cw_hold = st.slider(
-                            "Trzymaj przez (liczba skanów)", 1, cw_max_hold, min(5, cw_max_hold), key="cw_hold"
+                            "Trzymaj przez (liczba skanów)", 1, cw_max_hold, min(5, cw_max_hold), key="cw_hold",
+                            help="Ile kolejnych skanów 'trzymasz' pozycję przed symulowaną sprzedażą.",
                         )
 
                 if st.button("Uruchom backtest tych wag"):
@@ -1854,9 +1969,14 @@ def render_custom():
                         st.warning("Za mało danych dla tej kombinacji parametrów.")
                     else:
                         m1, m2, m3 = st.columns(3)
-                        m1.metric("Śr. zwrot na okno", f"{cw_bt['Śr. zwrot %'].mean():.2f}%")
-                        m2.metric("Win rate (średni)", f"{cw_bt['Win rate %'].mean():.1f}%")
-                        m3.metric("Liczba przetestowanych okien", len(cw_bt))
+                        m1.metric("Śr. zwrot na okno", f"{cw_bt['Śr. zwrot %'].mean():.2f}%",
+                                  help="Średni zwrot % z każdego przetestowanego okna (kupno TOP N, "
+                                       "trzymanie K skanów, sprzedaż).")
+                        m2.metric("Win rate (średni)", f"{cw_bt['Win rate %'].mean():.1f}%",
+                                  help="Jaki % przetestowanych okien zakończył się zyskiem.")
+                        m3.metric("Liczba przetestowanych okien", len(cw_bt),
+                                  help="Ile historycznych okien czasowych zostało przetestowanych — "
+                                       "więcej = bardziej wiarygodny wynik.")
                         equity = (1 + cw_bt["Śr. zwrot %"] / 100).cumprod() - 1
                         st.line_chart(pd.DataFrame(
                             {"Skumulowany zwrot %": (equity * 100).round(2)}, index=cw_bt["Data wyjścia"]
@@ -1872,7 +1992,10 @@ def render_watchlist():
         "Zapisywane w bazie — przetrwa między sesjami i restartami appki."
     )
 
-    st.subheader("Dodaj do watchlisty")
+    st.subheader(
+        "Dodaj do watchlisty",
+        help="Wybierz spółkę, opcjonalnie dodaj notatkę (np. powód obserwacji), kliknij Dodaj.",
+    )
     add_col1, add_col2, add_col3 = st.columns([2, 3, 1])
     with add_col1:
         new_ticker = st.selectbox(
@@ -1890,7 +2013,11 @@ def render_watchlist():
             st.rerun()
 
     st.divider()
-    st.subheader("Twoja watchlist")
+    st.subheader(
+        "Twoja watchlist",
+        help="Obserwowane spółki z aktualnymi danymi z najnowszej migawki. Notatki edytujesz "
+             "bezpośrednio w tabeli.",
+    )
     wl = db.load_watchlist()
 
     if wl.empty:
@@ -1948,7 +2075,11 @@ def render_watchlist():
                 st.rerun()
 
         st.divider()
-        st.subheader("🔗 Macierz korelacji")
+        st.subheader(
+            "🔗 Macierz korelacji",
+            help="Wartości blisko 1.0 = spółki poruszają się razem (ryzyko koncentracji). "
+                 "Blisko 0 = niezależne (dobra dywersyfikacja). Ujemne = poruszają się przeciwnie.",
+        )
         st.caption(
             "Sprawdza, czy obserwowane spółki poruszają się razem (ryzyko koncentracji) "
             "czy niezależnie (dywersyfikacja) — liczone z dziennych zwrotów cen. "
@@ -1989,14 +2120,20 @@ def render_bt_strategy():
         with c1:
             bt_strategy_name = st.selectbox("Strategia", list(STRATEGIES.keys()), key="bt_strategy")
         with c2:
-            bt_top_n = st.slider("TOP N spółek", 1, 20, 5)
+            bt_top_n = st.slider(
+                "TOP N spółek", 1, 20, 5,
+                help="Ile najlepszych spółek wg wybranej strategii 'kupujesz' w każdym oknie testowym.",
+            )
         with c3:
             max_hold = max(1, n_snapshots - 1)
             if max_hold < 2:
                 bt_hold = 1
                 st.caption("Trzymaj przez: 1 skan (za mało migawek na wybór zakresu)")
             else:
-                bt_hold = st.slider("Trzymaj przez (liczba skanów)", 1, max_hold, min(5, max_hold))
+                bt_hold = st.slider(
+                    "Trzymaj przez (liczba skanów)", 1, max_hold, min(5, max_hold),
+                    help="Ile kolejnych skanów 'trzymasz' pozycję przed symulowaną sprzedażą.",
+                )
 
         score_col, _ = STRATEGIES[bt_strategy_name]
         df_all = db.load_all_snapshots()
@@ -2009,11 +2146,17 @@ def render_bt_strategy():
             )
         else:
             m1, m2, m3, m4 = st.columns(4)
-            m1.metric("Śr. zwrot na okno", f"{bt_result['Śr. zwrot %'].mean():.2f}%")
-            m2.metric("Win rate (średni)", f"{bt_result['Win rate %'].mean():.1f}%")
-            m3.metric("Liczba przetestowanych okien", len(bt_result))
+            m1.metric("Śr. zwrot na okno", f"{bt_result['Śr. zwrot %'].mean():.2f}%",
+                      help="Średni zwrot % z każdego przetestowanego okna (kupno TOP N, "
+                           "trzymanie K skanów, sprzedaż).")
+            m2.metric("Win rate (średni)", f"{bt_result['Win rate %'].mean():.1f}%",
+                      help="Jaki % przetestowanych okien zakończył się zyskiem.")
+            m3.metric("Liczba przetestowanych okien", len(bt_result),
+                      help="Ile historycznych okien czasowych zostało przetestowanych — "
+                           "więcej = bardziej wiarygodny wynik.")
             best, worst = bt_result["Śr. zwrot %"].max(), bt_result["Śr. zwrot %"].min()
-            m4.metric("Najlepsze / najgorsze okno", f"{best:.1f}% / {worst:.1f}%")
+            m4.metric("Najlepsze / najgorsze okno", f"{best:.1f}% / {worst:.1f}%",
+                      help="Zwrot % najlepszego i najgorszego pojedynczego okna w teście.")
 
             st.caption(
                 "Krzywa kapitału zakłada mechaniczne reinwestowanie zwrotu z każdego okna "
@@ -2072,7 +2215,11 @@ def render_backtest():
         if df_price.empty or max_back < 1:
             st.info("Za krótka historia cen dla tej spółki, żeby cofać się w czasie (potrzeba co najmniej ~30 dni notowań).")
         else:
-            back_days = st.slider("Cofnij się o (dni handlowych)", 0, max_back, 0)
+            back_days = st.slider(
+                "Cofnij się o (dni handlowych)", 0, max_back, 0,
+                help="Przesuwa punkt odniesienia wstecz w historii cen, żeby zobaczyć jak wyglądały "
+                     "wskaźniki techniczne X dni handlowych temu.",
+            )
             as_of = df_price.index[-1 - back_days]
             price_then = float(df_price.loc[:as_of, "Close"].iloc[-1])
             ind = compute_indicators(df_price, price_then, as_of=as_of)
@@ -2131,12 +2278,18 @@ def _render_global_indicators_banner() -> None:
                     "😨 VIX", vix["value"],
                     delta=f"{vix['change_pct']}%" if vix["change_pct"] is not None else None,
                     delta_color="inverse",
+                    help="Indeks zmienności S&P500. <20 = spokojny rynek, 20-30 = podwyższona "
+                         "zmienność, >30 = wysoki niepokój/panika.",
                 )
             else:
                 st.caption("😨 VIX: niedostępny")
         with bc2:
             if sentiment:
-                st.metric("🎭 Nastroje", f"{sentiment['score']}/100")
+                st.metric(
+                    "🎭 Nastroje", f"{sentiment['score']}/100",
+                    help="Własny wskaźnik z VIX + szerokości rynku + RSI. <25 ekstremalny strach, "
+                         "25-45 strach, 45-55 neutralnie, 55-75 chciwość, >75 ekstremalna chciwość.",
+                )
             else:
                 st.caption("🎭 Nastroje: brak danych")
         with bc3:
