@@ -16,6 +16,7 @@ from core.scanner import (  # noqa: E402
     STRATEGIES, backtest_strategy, get_fx_rates, get_next_earnings_date, get_ticker_news,
     generate_brief, STRATEGY_MAX_SCORES, get_vix_level, compute_sentiment_index, green_flags,
     compute_stockrank, compute_snowflake, compute_correlation_matrix, get_insider_transactions,
+    get_tradingview_url,
 )
 
 st.set_page_config(page_title="XTB Screener", layout="wide")
@@ -88,6 +89,10 @@ GROUP_ICONS: dict[str, str] = {
 
 INDICATOR_HELP: dict[str, str] = {
     "Rynek": "Giełda/kraj notowania spółki.",
+    "TradingView": (
+        "Link do wykresu spółki na TradingView. Najlepszy dostępny szacunek na bazie tickera — "
+        "dla mniej popularnych spółek może czasem trafić na wyszukiwarkę zamiast wprost na wykres."
+    ),
     "Typ": "Akcja (stock) czy fundusz notowany na giełdzie (etf).",
     "Sektor": "Sektor gospodarki wg klasyfikacji Yahoo Finance (np. Technology, Financial Services).",
     "Branża": "Węższa kategoria biznesu w ramach sektora (np. 'Software – Application').",
@@ -205,11 +210,23 @@ def _column_config_for(columns: list[str]) -> dict:
     config = {}
     for col in columns:
         help_text = INDICATOR_HELP.get(col, "")
-        if col in TEXT_COLUMNS:
+        if col == "TradingView":
+            config[col] = st.column_config.LinkColumn(col, help=help_text, display_text="📈 Wykres")
+        elif col in TEXT_COLUMNS:
             config[col] = st.column_config.TextColumn(col, help=help_text)
         else:
             config[col] = st.column_config.NumberColumn(col, help=help_text)
     return config
+
+
+def _with_tradingview_link(df: pd.DataFrame) -> pd.DataFrame:
+    """Dokłada kolumnę 'TradingView' z linkiem do wykresu każdej spółki —
+    liczone na żywo z tickera, nic dodatkowego nie trzeba pobierać z sieci."""
+    if "Ticker" not in df.columns or df.empty:
+        return df
+    df = df.copy()
+    df["TradingView"] = df["Ticker"].apply(get_tradingview_url)
+    return df
 
 
 def _personalize_columns(
@@ -760,7 +777,7 @@ def render_screener():
             pref_key="screener_columns",
             available_columns=picker_available_cols,
             default_columns=DEFAULT_SCREENER_COLUMNS,
-            mandatory_columns=["Ticker", "Nazwa", "Cena"],
+            mandatory_columns=["Ticker", "Nazwa", "Cena", "TradingView"],
         )
 
         only_verified = st.checkbox("Pokaż tylko tickery ręcznie zweryfikowane na XTB", value=False)
@@ -875,6 +892,7 @@ def render_screener():
                 "ułatwia porównanie spółek notowanych w różnych walutach."
             )
 
+        filtered = _with_tradingview_link(filtered)
         display_cols = [c for c in active_columns if c in filtered.columns]
         display_df = filtered[display_cols]
         _render_table(display_df, height=600)
@@ -1009,10 +1027,11 @@ def render_strategie():
                 pref_key=f"strategie_columns__{strategy_name}",
                 available_columns=list(df.columns),
                 default_columns=[c for c in STRATEGY_COLUMNS[strategy_name] if c not in ("Ticker", "Nazwa")],
-                mandatory_columns=["Ticker", "Nazwa", "Cena"],
+                mandatory_columns=["Ticker", "Nazwa", "Cena", "TradingView"],
                 label=f"Personalizuj kolumny dla: {strategy_name}",
             )
             ranked = df[df["Typ"] == "stock"].sort_values(score_col, ascending=False).head(30)
+            ranked = _with_tradingview_link(ranked)
             display_cols = [c for c in active_strategy_cols + [score_col] if c in ranked.columns]
             display_cols = list(dict.fromkeys(display_cols))  # usuń ewentualny duplikat score_col
             _render_table(ranked[display_cols], height=600)
@@ -1091,6 +1110,7 @@ def render_profile():
 
     st.subheader(f"{row.get('Nazwa', ticker)} ({ticker})")
     st.caption(f"{row.get('Rynek', '—')} · {row.get('Sektor', 'Nieznany')} / {row.get('Branża', 'Nieznana')}")
+    st.link_button("📈 Otwórz wykres na TradingView", get_tradingview_url(ticker))
 
     m1, m2, m3, m4 = st.columns(4)
     cena = row.get("Cena")
@@ -1639,11 +1659,12 @@ def render_sector():
                     pref_key="sector_columns",
                     available_columns=list(peers.columns),
                     default_columns=default_sector_cols,
-                    mandatory_columns=["Ticker", "Nazwa", "Cena"],
+                    mandatory_columns=["Ticker", "Nazwa", "Cena", "TradingView"],
                     label="Personalizuj kolumny tej tabeli",
                 )
+                peers = _with_tradingview_link(peers)
                 sector_cols = [c for c in active_sector_cols if c in peers.columns]
-                sort_col = "Buy Score" if "Buy Score" in sector_cols else sector_cols[-1]
+                sort_col = "Buy Score" if "Buy Score" in sector_cols else "Cena"
                 _render_table(peers[sector_cols].sort_values(sort_col, ascending=False), height=400)
                 st.download_button(
                     "⬇️ Pobierz CSV (wszystkie dane sektora)", peers.to_csv(index=False).encode("utf-8"),
@@ -1715,8 +1736,9 @@ def render_pe_anomaly():
         st.info("Żadna spółka nie spełnia obecnych kryteriów — poluzuj suwaki powyżej.")
         return
 
+    candidates = _with_tradingview_link(candidates)
     display_cols = [c for c in [
-        "Ticker", "Nazwa", "Rynek", "Sektor", "Cena", "C/Z (P/E)",
+        "Ticker", "Nazwa", "Rynek", "Sektor", "Cena", "TradingView", "C/Z (P/E)",
         "Mediana C/Z sektora", "Różnica vs sektor (%)", "Spółek w sektorze",
         "ROE (%)", "Dług/Kapitał", "Liczba flag", "Buy Score",
     ] if c in candidates.columns]
@@ -1828,11 +1850,12 @@ def render_dividends():
             "Marża Operac. (%)", "Marża netto (%)", "Wzrost przychodów (%)",
             "Wzrost EPS (%)", "Dług/Kapitał", "Liczba flag",
         ]
+        candidates = _with_tradingview_link(candidates)
         active_dividend_cols = _personalize_columns(
             pref_key="dividends_columns",
             available_columns=list(candidates.columns),
             default_columns=default_dividend_cols,
-            mandatory_columns=["Ticker", "Nazwa", "Cena"],
+            mandatory_columns=["Ticker", "Nazwa", "Cena", "TradingView"],
         )
         display_cols = list(dict.fromkeys(
             [c for c in active_dividend_cols if c in candidates.columns] + [score_col]
@@ -1920,8 +1943,9 @@ def render_custom():
         else:
             stocks["Własny wynik"] = custom_score
             ranked = stocks.sort_values("Własny wynik", ascending=False).head(30)
+            ranked = _with_tradingview_link(ranked)
             active_cols = [col for _, col, _, _ in CUSTOM_COMPONENTS if weights.get(col, 0) > 0]
-            show_cols = ["Ticker", "Nazwa", "Rynek", "Cena", "Własny wynik"] + active_cols + ["Liczba flag"]
+            show_cols = ["Ticker", "Nazwa", "Rynek", "Cena", "TradingView", "Własny wynik"] + active_cols + ["Liczba flag"]
             show_cols = [c for c in dict.fromkeys(show_cols) if c in ranked.columns]
             _render_table(ranked[show_cols], height=600)
 
@@ -2027,6 +2051,7 @@ def render_watchlist():
         if dates:
             latest = db.load_snapshot(dates[0])
             wl = wl.merge(latest, on="Ticker", how="left")
+            wl = _with_tradingview_link(wl)
             if "Nazwa" in wl.columns and wl["Nazwa"].isna().any():
                 st.caption(
                     "Niektóre spółki nie mają jeszcze danych z najnowszej migawki "
@@ -2038,7 +2063,7 @@ def render_watchlist():
             pref_key="watchlist_columns",
             available_columns=list(wl.columns),
             default_columns=[c for c in default_watchlist_cols if c in wl.columns],
-            mandatory_columns=["Ticker", "Notatka"],
+            mandatory_columns=["Ticker", "Notatka", "TradingView"],
             label="Personalizuj dane widoczne obok notatek",
         )
         wl_display_cols = list(dict.fromkeys(
