@@ -546,6 +546,35 @@ def infer_currency(ticker: str) -> str:
     return "USD"
 
 
+# Kody giełd używane przez TradingView (potwierdzone oficjalną listą giełd
+# TradingView) — inne niż sufiksy Yahoo Finance, stąd osobne mapowanie.
+# Austria (.VI) i Portugalia (.LS) nie są jednoznacznie potwierdzone w
+# oficjalnym źródle — najlepszy dostępny szacunek (VIE, EURONEXT).
+_SUFFIX_TRADINGVIEW = {
+    ".WA": "GPW", ".DE": "XETR", ".PA": "EURONEXT", ".AS": "EURONEXT",
+    ".MC": "BME", ".ST": "OMXSTO", ".OL": "OSL", ".MI": "MIL",
+    ".VI": "VIE", ".LS": "EURONEXT", ".L": "LSE", ".SW": "SIX",
+}
+
+
+def get_tradingview_url(ticker: str) -> str:
+    """
+    Link do wykresu spółki na TradingView. Najlepszy dostępny szacunek na
+    bazie sufiksu tickera Yahoo Finance — dla mniej popularnych/mniejszych
+    spółek (zwłaszcza spoza dużych giełd) link może czasem nie trafić
+    idealnie; TradingView pokaże wtedy własną wyszukiwarkę zamiast wykresu,
+    zamiast błędu.
+    """
+    base, exchange = ticker, None
+    for suffix, tv_exchange in _SUFFIX_TRADINGVIEW.items():
+        if ticker.endswith(suffix):
+            base, exchange = ticker[: -len(suffix)], tv_exchange
+            break
+    if exchange:
+        return f"https://www.tradingview.com/symbols/{exchange}-{base}/"
+    return f"https://www.tradingview.com/symbols/{base}/"  # USA i inne bez sufiksu — TradingView sam rozpozna giełdę
+
+
 def get_fx_rates(currencies: set[str], target: str = "PLN") -> dict[str, float]:
     """
     Kursy walut do wspólnej waluty docelowej (domyślnie PLN), pobierane na
