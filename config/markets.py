@@ -20,7 +20,7 @@ w VERIFIED_TICKERS poniżej; ekran screenera pozwala filtrować tylko po nich.
 # AKCJE — mapy indeksów (przeniesione z oryginalnego skryptu użytkownika)
 # ---------------------------------------------------------------------------
 WIG20_MAP = {"ALE.WA": "Allegro", "ALR.WA": "Alior Bank", "BDX.WA": "Budimex", "BHW.WA": "Bank Handlowy", "CDR.WA": "CD Projekt", "CPS.WA": "Cyfrowy Polsat", "DNP.WA": "Dino Polska", "JSW.WA": "JSW", "KGH.WA": "KGHM", "KRU.WA": "Kruk", "LPP.WA": "LPP", "MBK.WA": "mBank", "OPL.WA": "Orange Polska", "PEO.WA": "Pekao SA", "PGE.WA": "PGE", "PKO.WA": "PKO BP", "PKN.WA": "ORLEN", "PZU.WA": "PZU", "SPL.WA": "Santander BP", "MDV.WA": "Modivo"}
-MWIG40_MAP = {"11B.WA": "11 bit studios", "1AT.WA": "Atal", "ABS.WA": "Asseco BS", "APR.WA": "Auto Partner", "ASB.WA": "ASBIS", "BFT.WA": "Benefit Systems", "CAR.WA": "Inter Cars", "CIG.WA": "CI Games", "CLN.WA": "Celon Pharma", "COG.WA": "Cognor", "DAT.WA": "DataWalk", "DOM.WA": "Dom Development", "EAT.WA": "AmRest", "ENP.WA": "Enea", "EUR.WA": "Eurocash", "GPP.WA": "Grupa Pracuj", "GRN.WA": "Grenevia", "GTC.WA": "GTC", "HUU.WA": "Huuuge", "ING.WA": "ING BSK", "TXT.WA": "Text S.A.", "MIL.WA": "Millennium", "MBR.WA": "Mo-BRUK", "NEU.WA": "Neuca", "PLW.WA": "PlayWay", "RVU.WA": "Revuele", "SEL.WA": "Selena FM", "STP.WA": "Stalproduct", "TEN.WA": "Ten Square Games", "TPE.WA": "Tauron", "VRG.WA": "VRG", "WPL.WA": "Wirtualna Polska", "XTB.WA": "XTB", "GPW.WA": "GPW", "SNK.WA": "Sanok", "AST.WA": "Asseco POL", "ATC.WA": "Arctic Paper"}
+MWIG40_MAP = {"11B.WA": "11 bit studios", "1AT.WA": "Atal", "ABS.WA": "Asseco BS", "APR.WA": "Auto Partner", "ASB.WA": "ASBIS", "BFT.WA": "Benefit Systems", "CAR.WA": "Inter Cars", "CIG.WA": "CI Games", "CLN.WA": "Celon Pharma", "COG.WA": "Cognor", "DAT.WA": "DataWalk", "DIA.WA": "Diagnostyka", "DOM.WA": "Dom Development", "EAT.WA": "AmRest", "ENP.WA": "Enea", "EUR.WA": "Eurocash", "GPP.WA": "Grupa Pracuj", "GRN.WA": "Grenevia", "GTC.WA": "GTC", "HUU.WA": "Huuuge", "ING.WA": "ING BSK", "TXT.WA": "Text S.A.", "MIL.WA": "Millennium", "MBR.WA": "Mo-BRUK", "NEU.WA": "Neuca", "PLW.WA": "PlayWay", "RVU.WA": "Revuele", "SEL.WA": "Selena FM", "STP.WA": "Stalproduct", "TEN.WA": "Ten Square Games", "TPE.WA": "Tauron", "VRG.WA": "VRG", "WPL.WA": "Wirtualna Polska", "XTB.WA": "XTB", "GPW.WA": "GPW", "SNK.WA": "Sanok", "AST.WA": "Asseco POL", "ATC.WA": "Arctic Paper"}
 DAX_MAP = {"ADS.DE": "Adidas", "AIR.DE": "Airbus", "ALV.DE": "Allianz", "BAS.DE": "BASF", "BAYN.DE": "Bayer", "BEI.DE": "Beiersdorf", "BMW.DE": "BMW", "BNR.DE": "Brenntag", "CBK.DE": "Commerzbank", "CON.DE": "Continental", "1COV.DE": "Covestro", "DTG.DE": "Daimler Truck", "DBK.DE": "Deutsche Bank", "DB1.DE": "Deutsche Börse", "DPW.DE": "DHL Group", "DTE.DE": "Deutsche Telekom", "EOAN.DE": "E.ON", "FRE.DE": "Fresenius", "HNR1.DE": "Hannover Re", "HEI.DE": "Heidelberg Materials", "HEN3.DE": "Henkel", "IFX.DE": "Infineon", "MBG.DE": "Mercedes-Benz", "MRK.DE": "Merck", "MTX.DE": "MTU Aero Engines", "MUV2.DE": "Munich Re", "P911.DE": "Porsche AG", "PAH3.DE": "Porsche SE", "QIA.DE": "Qiagen", "RHM.DE": "Rheinmetall", "RWE.DE": "RWE", "SAP.DE": "SAP", "SRT3.DE": "Sartorius", "SIE.DE": "Siemens", "ENR.DE": "Siemens Energy", "SHL.DE": "Siemens Healthineers", "SY1.DE": "Symrise", "VOW3.DE": "Volkswagen", "VNA.DE": "Vonovia", "ZAL.DE": "Zalando"}
 CAC40_MAP = {"AC.PA": "Accor", "AI.PA": "Air Liquide", "AIR.PA": "Airbus", "MT.AS": "ArcelorMittal", "CS.PA": "AXA", "BNP.PA": "BNP Paribas", "EN.PA": "Bouygues", "CAP.PA": "Capgemini", "CA.PA": "Carrefour", "ACA.PA": "Crédit Agricole", "BN.PA": "Danone", "DSY.PA": "Dassault Systèmes", "EDEN.PA": "Edenred", "ENGI.PA": "Engie", "EL.PA": "EssilorLuxottica", "ERF.PA": "Eurofins Scientific", "RMS.PA": "Hermès", "KER.PA": "Kering", "LR.PA": "Legrand", "OR.PA": "L'Oréal", "MC.PA": "LVMH", "ML.PA": "Michelin", "ORP.PA": "Orange", "PRV.PA": "Pernod Ricard", "PUB.PA": "Publicis Groupe", "RNO.PA": "Renault", "SAF.PA": "Safran", "SGO.PA": "Saint-Gobain", "SAN.PA": "Sanofi", "SU.PA": "Schneider Electric", "GLE.PA": "Société Générale", "STLAP.PA": "Stellantis", "STMPA.PA": "STMicroelectronics", "TEP.PA": "Teleperformance", "HO.PA": "Thales", "TTE.PA": "TotalEnergies", "URW.AS": "Unibail-Rodamco-Westfield", "VIE.PA": "Veolia", "DG.PA": "Vinci", "VIV.PA": "Vivendi"}
 FTSE_MAP = {"SHEL.L": "Shell", "AZN.L": "AstraZeneca", "HSBA.L": "HSBC", "ULVR.L": "Unilever", "BP.L": "BP", "GSK.L": "GSK", "DGE.L": "Diageo", "REL.L": "RELX", "BATS.L": "British American Tobacco", "GLEN.L": "Glencore", "RIO.L": "Rio Tinto", "BA.L": "BAE Systems", "CPG.L": "Compass Group", "LSEG.L": "LSEG", "NWG.L": "NatWest Group", "BARC.L": "Barclays", "STAN.L": "Standard Chartered", "NG.L": "National Grid", "AHT.L": "Ashtead", "TSCO.L": "Tesco", "LLOY.L": "Lloyds", "PRU.L": "Prudential", "AV.L": "Aviva", "SSE.L": "SSE", "LGEN.L": "Legal & General", "RTO.L": "Rentokil", "NXT.L": "Next", "WPP.L": "WPP", "VOD.L": "Vodafone", "RR.L": "Rolls-Royce", "EZJ.L": "easyJet", "IAG.L": "IAG"}
@@ -196,6 +196,12 @@ PSI_MAP = {
     "IBS.LS": "Ibersol",
 }
 
+# Pojedyncze, ważne spółki UK spoza FTSE 100 (np. FTSE 250) — dopisywane
+# ręcznie na żądanie, żeby nie mieszać ich z czystą listą "FTSE 100".
+UK_EXTRA_MAP = {
+    "WIZZ.L": "Wizz Air Holdings",
+}
+
 # Tickery ręcznie potwierdzone przez Ciebie jako dostępne na koncie XTB.
 # Zostaw pustą listę, żeby na starcie nie filtrować niczego — a docelowo
 # uzupełniaj w miarę weryfikacji w platformie.
@@ -207,6 +213,7 @@ STOCK_GROUPS = {
     "Niemcy (DAX)": DAX_MAP,
     "Francja (CAC 40)": CAC40_MAP,
     "UK (FTSE 100)": FTSE_MAP,
+    "UK (dodatkowe spoza FTSE 100)": UK_EXTRA_MAP,
     "Hiszpania (IBEX 35)": IBEX_MAP,
     "Szwecja (OMX 30)": OMX_MAP,
     "Norwegia (OBX)": OBX_MAP,
