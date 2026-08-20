@@ -11,6 +11,7 @@ import random
 import time
 import warnings
 from datetime import datetime
+from urllib.parse import quote
 
 import numpy as np
 import pandas as pd
@@ -559,20 +560,20 @@ _SUFFIX_TRADINGVIEW = {
 
 def get_tradingview_url(ticker: str) -> str:
     """
-    Link do wykresu spółki na TradingView. Najlepszy dostępny szacunek na
-    bazie sufiksu tickera Yahoo Finance — dla mniej popularnych/mniejszych
-    spółek (zwłaszcza spoza dużych giełd) link może czasem nie trafić
-    idealnie; TradingView pokaże wtedy własną wyszukiwarkę zamiast wykresu,
-    zamiast błędu.
+    Link PROSTO do interaktywnego wykresu na TradingView (nie do strony
+    przeglądowej spółki — jeden klik, bez pośredniego ekranu). Najlepszy
+    dostępny szacunek na bazie sufiksu tickera Yahoo Finance — dla mniej
+    popularnych/mniejszych spółek (zwłaszcza spoza dużych giełd) link może
+    czasem nie trafić idealnie; TradingView pokaże wtedy własną wyszukiwarkę
+    zamiast wykresu, zamiast błędu.
     """
     base, exchange = ticker, None
     for suffix, tv_exchange in _SUFFIX_TRADINGVIEW.items():
         if ticker.endswith(suffix):
             base, exchange = ticker[: -len(suffix)], tv_exchange
             break
-    if exchange:
-        return f"https://www.tradingview.com/symbols/{exchange}-{base}/"
-    return f"https://www.tradingview.com/symbols/{base}/"  # USA i inne bez sufiksu — TradingView sam rozpozna giełdę
+    symbol = f"{exchange}:{base}" if exchange else base  # USA i inne bez sufiksu — TradingView sam rozpozna giełdę
+    return f"https://www.tradingview.com/chart/?symbol={quote(symbol)}"
 
 
 def get_fx_rates(currencies: set[str], target: str = "PLN") -> dict[str, float]:
