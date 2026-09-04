@@ -522,6 +522,27 @@ MODULE_REGISTRY = [
 ]
 ALL_MODULE_KEYS = [key for key, _ in MODULE_REGISTRY]
 
+# Kategorie modułów — kolor służy do ORIENTACJI, nie do ozdoby: po tygodniu
+# trafiasz w "Dywidendy" po barwie, nie czytając etykiet. Sześć kategorii na
+# trzynaście modułów, zamiast trzynastu przypadkowych kolorów.
+#
+# Barwy dobrane tak, żeby czytały się i na jasnym, i na ciemnym tle — przycisk
+# dostaje z nich lewą krawędź oraz delikatny przezroczysty podkład, więc muszą
+# działać na obu podłożach.
+MODULE_CATEGORIES = [
+    ("Przegląd rynku",  "#4A6BE8", ["screener", "overview", "dashboard"]),
+    ("Strategie",       "#1E9C5E", ["strategie", "custom"]),
+    ("Analiza spółki",  "#C96A1E", ["profile", "sector", "pe_anomaly"]),
+    ("Dywidendy",       "#8C7415", ["dividends"]),
+    ("Moje",            "#7A5AD8", ["watchlist", "trade_review"]),
+    ("Backtesty",       "#1A7E97", ["bt_strategy", "backtest"]),
+]
+
+# Moduł nieprzypisany do żadnej kategorii NIE zniknie z nawigacji — trafi do
+# grupy "Pozostałe" (patrz app.py). Dzięki temu dodanie modułu bez dopisania go
+# tutaj jest niedopatrzeniem kosmetycznym, a nie zniknięciem zakładki.
+
+
 MODULE_DESCRIPTIONS = {
     "screener": "Filtrowanie i przegląd wszystkich zeskanowanych spółek/ETF-ów naraz.",
     "strategie": "Gotowe strategie inwestycyjne (Deep Value, Momentum, Dywidendowa i inne).",

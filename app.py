@@ -93,7 +93,9 @@ st.markdown(
 
 from core import db  # noqa: E402
 from core.scanner import compute_sentiment_index  # noqa: E402
-from ui.common import MODULE_REGISTRY, ALL_MODULE_KEYS, _vix_level  # noqa: E402
+from ui.common import (  # noqa: E402
+    MODULE_REGISTRY, ALL_MODULE_KEYS, MODULE_CATEGORIES, MODULE_DESCRIPTIONS, _vix_level,
+)
 from ui.onboarding import render_onboarding_wizard  # noqa: E402
 from ui.screener import render_screener  # noqa: E402
 from ui.strategie import render_strategie  # noqa: E402
@@ -247,11 +249,109 @@ def _render_global_indicators_banner() -> None:
 
 _render_global_indicators_banner()
 
-active_modules = [(key, label) for key, label in MODULE_REGISTRY if key in selected_modules]
-streamlit_tabs = st.tabs([label for _, label in active_modules])
-for st_tab, (key, _label) in zip(streamlit_tabs, active_modules):
-    with st_tab:
-        RENDER_FUNCS[key]()
+# ---------------------------------------------------------------------------
+# NAWIGACJA PRZYCISKAMI (zamiast st.tabs)
+#
+# Powód nie jest wyłącznie estetyczny. st.tabs renderuje zawartość WSZYSTKICH
+# zakładek przy każdym przebiegu skryptu — czyli ruch suwakiem w Screenerze
+# przeliczał też Dashboard, oba backtesty i całą resztę. Przy nawigacji
+# przyciskami wykonuje się wyłącznie oglądany moduł.
+#
+# UWAGA przy testowaniu: dawniej jedno wejście na stronę uruchamiało wszystkie
+# 13 funkcji render_* i łapało każdy błąd importu. Teraz tak NIE jest — patrz
+# scripts/sprawdz_moduly.py.
+# ---------------------------------------------------------------------------
+def _hex_na_rgb(hex_kolor: str) -> str:
+    h = hex_kolor.lstrip("#")
+    return ", ".join(str(int(h[i:i + 2], 16)) for i in (0, 2, 4))
+
+
+def _kolor_modulu(key: str) -> str:
+    for _label, kolor, klucze in MODULE_CATEGORIES:
+        if key in klucze:
+            return kolor
+    return "#8A8F98"
+
+
+def _grupy_do_pokazania(widoczne: list[str]) -> list[tuple[str, str, list[str]]]:
+    """Kategorie ograniczone do modułów włączonych przez użytkownika."""
+    grupy = []
+    przypisane: set[str] = set()
+    for label, kolor, klucze in MODULE_CATEGORIES:
+        w_grupie = [k for k in klucze if k in widoczne]
+        przypisane.update(klucze)
+        if w_grupie:
+            grupy.append((label, kolor, w_grupie))
+    # Moduł spoza kategorii nadal musi być dostępny.
+    osierocone = [k for k in widoczne if k not in przypisane]
+    if osierocone:
+        grupy.append(("Pozostałe", "#8A8F98", osierocone))
+    return grupy
+
+
+def _style_nawigacji(widoczne: list[str], aktywny: str) -> None:
+    """
+    Koloruje przyciski nawigacji. Streamlit nadaje kontenerowi każdego widżetu
+    klasę `st-key-<klucz>`, więc da się trafić w konkretny przycisk bez
+    kruchych selektorów pozycyjnych.
+
+    Podkład jest półprzezroczysty (rgba), dzięki czemu ten sam kolor działa
+    na jasnym i na ciemnym motywie — nie trzeba wykrywać, który jest aktywny.
+    """
+    reguly = []
+    for key in widoczne:
+        rgb = _hex_na_rgb(_kolor_modulu(key))
+        moc = "0.30" if key == aktywny else "0.10"
+        grubosc = "5px" if key == aktywny else "4px"
+        waga = "800" if key == aktywny else "600"
+        reguly.append(
+            f'.st-key-nav_{key} button {{'
+            f' background-color: rgba({rgb}, {moc}) !important;'
+            f' border: 1px solid rgba({rgb}, 0.35) !important;'
+            f' border-left: {grubosc} solid rgb({rgb}) !important;'
+            f' font-weight: {waga} !important;'
+            f' text-align: left !important;'
+            f' justify-content: flex-start !important;'
+            f' }}'
+            f'.st-key-nav_{key} button:hover {{'
+            f' background-color: rgba({rgb}, 0.22) !important;'
+            f' }}'
+        )
+    st.markdown("<style>" + "".join(reguly) + "</style>", unsafe_allow_html=True)
+
+
+_etykiety = dict(MODULE_REGISTRY)
+_widoczne = [key for key, _ in MODULE_REGISTRY if key in selected_modules]
+
+# Moduł mógł zostać odznaczony po tym, jak był aktywny — wracamy do pierwszego.
+_aktywny = st.session_state.get("aktywny_modul")
+if _aktywny not in _widoczne:
+    _aktywny = _widoczne[0]
+    st.session_state["aktywny_modul"] = _aktywny
+
+_style_nawigacji(_widoczne, _aktywny)
+
+for _label_grupy, _kolor_grupy, _klucze in _grupy_do_pokazania(_widoczne):
+    st.markdown(
+        f'<div style="display:flex;align-items:center;gap:8px;margin:14px 0 6px;'
+        f'font-size:0.72rem;font-weight:700;text-transform:uppercase;'
+        f'letter-spacing:0.09em;opacity:0.65;">'
+        f'<span style="width:9px;height:9px;border-radius:3px;'
+        f'background:{_kolor_grupy};display:inline-block;"></span>{_label_grupy}</div>',
+        unsafe_allow_html=True,
+    )
+    _kolumny = st.columns(min(len(_klucze), 4))
+    for _i, _key in enumerate(_klucze):
+        with _kolumny[_i % len(_kolumny)]:
+            if st.button(
+                _etykiety[_key], key=f"nav_{_key}", use_container_width=True,
+                help=MODULE_DESCRIPTIONS.get(_key),
+            ):
+                st.session_state["aktywny_modul"] = _key
+                st.rerun()
+
+st.divider()
+RENDER_FUNCS[_aktywny]()
 
 
 # ---------------------------------------------------------------------------
