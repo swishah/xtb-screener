@@ -48,12 +48,29 @@ _zastosuj_sekrety_streamlit()
 # poniżej konfiguracji strony, z dopiskiem noqa dla lintera.
 # ---------------------------------------------------------------------------
 st.set_page_config(page_title="XTB Screener", layout="wide")
-st.title("📊 XTB Stock & ETF Screener")
-st.caption(
-    "Dane historyczne/fundamentalne: Yahoo Finance. Uniwersum tickerów oparte o "
-    "składy głównych indeksów + popularne ETF-y UCITS — zweryfikuj dostępność "
-    "konkretnego instrumentu w platformie XTB przed transakcją."
-)
+
+# Wyjaśnienia NIE stoją na wierzchu — chowamy je pod pytajnikiem obok tytułu
+# i w stopce. Świadomy wymóg produktowy: ekran ma być przejrzysty, a opisy
+# metodologii mają być dostępne wtedy, gdy ktoś ich szuka, a nie zajmować
+# najlepsze miejsce na stronie przy każdym wejściu.
+_tytul, _pomoc = st.columns([14, 1], vertical_alignment="bottom")
+with _tytul:
+    st.title("📊 XTB Stock & ETF Screener")
+with _pomoc:
+    with st.popover("❔", use_container_width=True, help="Skąd te dane?"):
+        st.markdown(
+            "**Dane:** Yahoo Finance, pobierane raz dziennie po zamknięciu "
+            "rynków amerykańskich.\n\n"
+            "**Uniwersum:** składy głównych indeksów (WIG, DAX, CAC40, FTSE100, "
+            "IBEX35, OMX30, OBX, S&P 500 i 400) plus popularne ETF-y UCITS. "
+            "Przed transakcją zweryfikuj dostępność instrumentu w platformie XTB "
+            "— screener nie zna jej pełnej oferty.\n\n"
+            "**Buy Score:** suma dziewięciu sygnałów technicznych i "
+            "fundamentalnych. Im wyżej, tym więcej z nich zagrało naraz.\n\n"
+            "**Czerwone flagi:** ostrzeżenia o kondycji spółki (zadłużenie, "
+            "marże, wypłacalność dywidendy). Zero flag nie znaczy „dobra "
+            "inwestycja\" — znaczy „nie znaleziono ostrzeżeń\"."
+        )
 
 # Subtelna, bezpieczna animacja hover na przyciskach/kartach — celuje w klasę
 # .stButton, która jest stabilna w Streamlit od dawna, więc nie powinna się
@@ -235,3 +252,16 @@ streamlit_tabs = st.tabs([label for _, label in active_modules])
 for st_tab, (key, _label) in zip(streamlit_tabs, active_modules):
     with st_tab:
         RENDER_FUNCS[key]()
+
+
+# ---------------------------------------------------------------------------
+# Stopka — zastrzeżenia drobnym drukiem, na końcu strony zamiast na górze.
+# ---------------------------------------------------------------------------
+st.divider()
+st.caption(
+    "Narzędzie do przeglądu i rankingu instrumentów, **nie porada inwestycyjna** "
+    "— decyzje i ich skutki są po Twojej stronie. Wskaźniki liczone podczas "
+    "codziennego skanu; newsy, wyniki finansowe, dane insiderów i korelacje "
+    "pobierane na żądanie, po kliknięciu. Pełna metodologia — pod pytajnikiem "
+    "przy tytule."
+)
