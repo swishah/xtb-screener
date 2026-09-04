@@ -531,6 +531,96 @@ def infer_market(ticker: str) -> str:
     return "USA"
 
 
+# ---------------------------------------------------------------------------
+# Konwersja tickerów z formatu XTB na format Yahoo Finance
+#
+# XTB oznacza instrumenty sufiksem KRAJU (ALE.PL), Yahoo — sufiksem GIEŁDY
+# (ALE.WA). Bez tłumaczenia eksport z XTB jest w module Analizy transakcji
+# bezużyteczny, bo Yahoo nie rozpozna praktycznie żadnego symbolu.
+#
+# Mapowanie sprawdzone EMPIRYCZNIE na prawdziwym eksporcie z xStation 5
+# (45 instrumentów, wrzesień 2026) — każdy symbol został realnie pobrany
+# z Yahoo. Wynik: 43/45. Dwa braki to instrumenty, których Yahoo po prostu
+# nie prowadzi (Credit Suisse po wchłonięciu przez UBS, Kombinat Konopny),
+# a nie błąd tłumaczenia.
+# ---------------------------------------------------------------------------
+_XTB_SUFFIX_YAHOO = {
+    # --- zweryfikowane na prawdziwych danych ---
+    "PL": "WA",   # GPW Warszawa
+    "US": "",     # giełdy USA — Yahoo nie używa sufiksu
+    "DE": "DE",   # Xetra (akurat zgodne)
+    "FR": "PA",   # Euronext Paryż
+    "CH": "SW",   # SIX Zurych
+    "UK": "L",    # LSE Londyn
+    "IT": "MI",   # Borsa Italiana
+    # --- z konwencji Yahoo, NIEsprawdzone (brak w eksporcie testowym) ---
+    # Jeśli któryś okaże się błędny, popraw tutaj — reszta kodu bez zmian.
+    "ES": "MC", "NL": "AS", "PT": "LS", "BE": "BR", "AT": "VI",
+    "SE": "ST", "NO": "OL", "DK": "CO", "FI": "HE", "CZ": "PR",
+    "IE": "IR", "HU": "BD",
+}
+
+# Przypadki, w których sam sufiks nie wystarcza — spółka zmieniła nazwę albo
+# Yahoo prowadzi ją pod innym symbolem bazowym. Oba sprawdzone pobraniem.
+_XTB_TICKER_OVERRIDES = {
+    "CCC.PL": "MDV.WA",    # CCC przemianowane na Modivo, wraz ze zmianą tickera
+    "TUI.DE": "TUI1.DE",   # Yahoo prowadzi TUI na Xetrze jako TUI1
+}
+
+
+# Ile razy pomnożyć cenę z brokera, żeby zgadzała się z notowaniem Yahoo.
+# Część giełd (przede wszystkim LSE) Yahoo podaje w SUBJEDNOSTKACH waluty —
+# pensach zamiast funtów, co sygnalizuje małą literą w kodzie waluty ("GBp"
+# zamiast "GBP"). Broker podaje cenę w funtach, więc bez korekty porównanie
+# wychodzi zawyżone 100-krotnie (realny przypadek: Wizz Air kupiony po 10,75
+# GBP vs notowanie 1074 pensy dawało "mogłeś kupić taniej o 9795%").
+_SKALA_CACHE: dict[str, float] = {}
+
+
+def yahoo_price_scale(ticker: str) -> float:
+    """
+    Zwraca 100.0, gdy Yahoo notuje instrument w subjednostkach waluty
+    (np. pensach), a 1.0 w każdym innym przypadku — również wtedy, gdy nie
+    udało się ustalić waluty, bo lepiej nie ruszać ceny niż zepsuć dobrą.
+    """
+    t = str(ticker or "").strip().upper()
+    if not t:
+        return 1.0
+    if t in _SKALA_CACHE:
+        return _SKALA_CACHE[t]
+    skala = 1.0
+    try:
+        currency = (yf.Ticker(t).info or {}).get("currency")
+        # "GBp" ma małą literę na końcu, "GBP"/"USD"/"PLN" nie mają.
+        if currency and str(currency) != str(currency).upper():
+            skala = 100.0
+    except Exception:  # noqa: BLE001
+        pass
+    _SKALA_CACHE[t] = skala
+    return skala
+
+
+def xtb_to_yahoo(ticker: str) -> str:
+    """
+    Tłumaczy symbol z eksportu XTB na symbol Yahoo Finance (ALE.PL -> ALE.WA).
+
+    Przy nieznanym sufiksie zwraca wejście bez zmian — lepiej spróbować i nie
+    znaleźć danych, niż z góry odrzucić symbol, który może być zgodny.
+    """
+    t = str(ticker or "").strip().upper()
+    if not t:
+        return ""
+    if t in _XTB_TICKER_OVERRIDES:
+        return _XTB_TICKER_OVERRIDES[t]
+    if "." not in t:
+        return t
+    base, suffix = t.rsplit(".", 1)
+    yahoo_suffix = _XTB_SUFFIX_YAHOO.get(suffix)
+    if yahoo_suffix is None:
+        return t
+    return base if yahoo_suffix == "" else f"{base}.{yahoo_suffix}"
+
+
 _SUFFIX_CURRENCY = {
     ".WA": "PLN", ".DE": "EUR", ".PA": "EUR", ".AS": "EUR", ".MC": "EUR",
     ".LS": "EUR", ".MI": "EUR", ".VI": "EUR", ".L": "GBP", ".ST": "SEK",
