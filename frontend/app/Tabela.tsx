@@ -1,4 +1,4 @@
-import { liczba, type Instrument } from "@/lib/dane";
+import { liczba, type Instrument } from "@/lib/filtry";
 
 /**
  * Tabela instrumentów. Komponent serwerowy — nie ma tu stanu ani zdarzeń,

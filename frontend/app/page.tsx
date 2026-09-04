@@ -2,7 +2,8 @@ import Link from "next/link";
 import Pasek from "./Pasek";
 import Tabela from "./Tabela";
 import { KATEGORIE } from "./moduly";
-import { migawkaBezpieczna, najlepsze, statystyki } from "@/lib/dane";
+import { migawkaBezpieczna } from "@/lib/dane";
+import { najlepsze, statystyki } from "@/lib/filtry";
 
 // Renderowanie na żądanie: strona ma pokazywać stan bazy, a nie zamrożoną
 // wersję z chwili budowania. Powtarzalny koszt odczytu zdejmuje bufor

@@ -1,24 +1,60 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import Pasek from "../Pasek";
 import Tabela from "../Tabela";
-import { liczba, migawkaBezpieczna } from "@/lib/dane";
+import PanelFiltrow from "./Filtry";
+import { migawkaBezpieczna } from "@/lib/dane";
+import {
+  FILTRY_DOMYSLNE,
+  filtruj,
+  wartosci,
+  type Filtry,
+} from "@/lib/filtry";
 
 export const dynamic = "force-dynamic";
 
-/**
- * Screener — pierwszy przeniesiony moduł.
- *
- * Na razie bez filtrów: pokazuje akcje posortowane wg Buy Score, ograniczone
- * do 100 pozycji. Filtry przychodzą w kolejnym kroku; ta strona ma najpierw
- * udowodnić, że wzorzec działa na prawdziwych danych.
- */
-export default async function Screener() {
+const LIMIT = 200;
+
+/** Liczba z adresu URL; przy śmieciach wraca wartość domyślna. */
+function num(wejscie: string | undefined, domyslna: number): number {
+  if (wejscie === undefined) return domyslna;
+  const n = Number(wejscie);
+  return Number.isFinite(n) ? n : domyslna;
+}
+
+export default async function Screener({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const q = await searchParams;
+  const jeden = (k: string) => {
+    const v = q[k];
+    return Array.isArray(v) ? v[0] : v;
+  };
+
+  const filtry: Filtry = {
+    typ: jeden("typ") ?? FILTRY_DOMYSLNE.typ,
+    rynek: jeden("rynek") ?? "",
+    sektor: jeden("sektor") ?? "",
+    minScore: num(jeden("minScore"), 0),
+    maxAth: num(jeden("maxAth"), 0),
+    maxFlag: num(jeden("maxFlag"), 10),
+    szukaj: jeden("szukaj") ?? "",
+    sortuj: jeden("sortuj") ?? FILTRY_DOMYSLNE.sortuj,
+  };
+
   const { data, tryb, instrumenty, blad } = await migawkaBezpieczna();
 
-  const akcje = instrumenty
-    .filter((i) => i.Typ === "stock")
-    .sort((a, b) => (liczba(b["Buy Score"]) ?? -1) - (liczba(a["Buy Score"]) ?? -1))
-    .slice(0, 100);
+  // Listy wyboru budujemy z instrumentów danego TYPU, ale bez pozostałych
+  // filtrów — inaczej wybranie sektora wycinałoby z listy rynki i nie dałoby
+  // się już wrócić.
+  const wTypie = filtry.typ
+    ? instrumenty.filter((i) => i.Typ === filtry.typ)
+    : instrumenty;
+
+  const dopasowane = filtruj(instrumenty, filtry);
+  const widoczne = dopasowane.slice(0, LIMIT);
 
   return (
     <main className="wrap">
@@ -27,29 +63,43 @@ export default async function Screener() {
       {blad && (
         <div className="alert">
           <b>Nie udało się wczytać danych.</b>
-          <div style={{ marginTop: 8, fontSize: "0.78rem", opacity: 0.75 }}>
-            {blad}
-          </div>
+          <div style={{ marginTop: 8, fontSize: "0.78rem", opacity: 0.75 }}>{blad}</div>
         </div>
       )}
 
-      <div className="card">
-        <div className="cardhead">
-          <h2>Screener</h2>
-          <em>
-            {akcje.length} z {instrumenty.filter((i) => i.Typ === "stock").length} akcji,
-            wg Buy Score
-          </em>
-          <Link className="link" href="/">
-            ← Wróć na pulpit
-          </Link>
-        </div>
-        <Tabela wiersze={akcje} />
+      <div className="cardhead" style={{ padding: "18px 0 4px" }}>
+        <h2 style={{ fontSize: "1.15rem" }}>Screener</h2>
+        <em>migawka z {data}</em>
+        <Link className="link" href="/">
+          ← Wróć na pulpit
+        </Link>
+      </div>
+
+      <Suspense fallback={<div className="filtry">Wczytuję filtry…</div>}>
+        <PanelFiltrow
+          wartosci={filtry}
+          rynki={wartosci(wTypie, "Rynek")}
+          sektory={wartosci(wTypie, "Sektor")}
+          liczbaWynikow={dopasowane.length}
+          liczbaWszystkich={wTypie.length}
+        />
+      </Suspense>
+
+      <div className="card" style={{ marginTop: 12 }}>
+        <Tabela wiersze={widoczne} />
       </div>
 
       <footer>
-        Lista skrócona do 100 pozycji o najwyższym Buy Score. Filtrowanie po
-        rynku, sektorze i wskaźnikach — w kolejnym kroku.
+        {dopasowane.length > LIMIT ? (
+          <>
+            Pokazane pierwsze {LIMIT} z {dopasowane.length.toLocaleString("pl-PL")}{" "}
+            dopasowań — zawęź filtry, żeby zobaczyć resztę.
+          </>
+        ) : (
+          <>Wszystkie dopasowania mieszczą się na liście.</>
+        )}{" "}
+        Wskaźniki liczone podczas codziennego skanu; „BRAK" znaczy, że Yahoo nie
+        podało danej wartości.
       </footer>
     </main>
   );

@@ -218,6 +218,50 @@ a.mod:hover { transform: translateY(-2px); box-shadow: var(--lift); }
 .k5 { --m-bg: var(--k5-bg); --m-fg: var(--k5-fg); }
 .k6 { --m-bg: var(--k6-bg); --m-fg: var(--k6-fg); }
 
+/* ---------- panel filtrów ---------- */
+.filtry {
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: 14px; padding: 14px 16px 12px; margin-top: 12px;
+}
+.filtry-siatka {
+  display: grid; gap: 10px 14px;
+  grid-template-columns: repeat(auto-fit, minmax(168px, 1fr));
+}
+.filtry label { display: flex; flex-direction: column; gap: 5px; }
+.filtry label > span {
+  font-size: 0.7rem; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--muted);
+}
+.filtry select,
+.filtry input {
+  font-family: inherit; font-size: 0.9rem; color: var(--fg);
+  background: var(--bg); border: 1px solid var(--line);
+  border-radius: 9px; padding: 8px 10px; width: 100%;
+  /* 16px na telefonie zapobiega automatycznemu przybliżeniu w Safari przy
+     wejściu w pole — irytujące i trudne do cofnięcia jednym kciukiem. */
+}
+.filtry select:focus-visible,
+.filtry input:focus-visible {
+  outline: 2px solid var(--ring); outline-offset: 1px; border-color: var(--accent);
+}
+.filtry-stopka {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line);
+  font-family: var(--mono); font-size: 0.8rem; color: var(--muted);
+}
+.filtry-stopka .liczy { opacity: 0.6; }
+.filtry-stopka button {
+  margin-left: auto; font: inherit; font-family: var(--sans);
+  color: var(--accent); background: none; border: 0; cursor: pointer;
+  padding: 4px 0; font-weight: 600;
+}
+.filtry-stopka button:hover { text-decoration: underline; }
+
+@media (max-width: 720px) {
+  .filtry select,
+  .filtry input { font-size: 16px; }
+}
+
 /* ---------- karta z tabelą ---------- */
 .card {
   margin-top: 26px; background: var(--surface); border: 1px solid var(--line);
