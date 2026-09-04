@@ -6,3 +6,4 @@ requests>=2.31
 lxml
 matplotlib>=3.8
 openpyxl>=3.1
+libsql>=0.1

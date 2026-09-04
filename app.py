@@ -4,12 +4,39 @@ po jednym pliku na moduł (patrz ui/common.py po wspólne pomocniki).
 """
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
 import streamlit as st
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+
+def _zastosuj_sekrety_streamlit() -> None:
+    """
+    Przepisuje sekrety z st.secrets do zmiennych środowiskowych.
+
+    core/db.py celowo nie importuje streamlita (korzysta z niego też skrypt
+    skanujący w GitHub Actions, gdzie streamlita nie ma), więc adres bazy
+    i token czyta wyłącznie ze zmiennych środowiskowych. Ta funkcja jest
+    mostkiem między jednym a drugim i MUSI wykonać się przed pierwszym
+    dotknięciem bazy — stąd wywołanie tuż poniżej, przed importami ui/.
+
+    Brak sekretów nie jest błędem: appka przechodzi wtedy w tryb lokalnego
+    pliku data/history.db.
+    """
+    try:
+        for klucz in ("TURSO_DATABASE_URL", "TURSO_AUTH_TOKEN"):
+            wartosc = st.secrets.get(klucz)
+            if wartosc and not os.environ.get(klucz):
+                os.environ[klucz] = str(wartosc)
+    except Exception:  # noqa: BLE001
+        # Brak pliku secrets.toml przy pracy lokalnej — normalna sytuacja.
+        pass
+
+
+_zastosuj_sekrety_streamlit()
 
 # ---------------------------------------------------------------------------
 # KOLEJNOŚĆ W TYM PLIKU JEST ISTOTNA — nie przestawiaj importów na górę!

@@ -11,6 +11,11 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    env:
+      # Ustawione jako zmienne na poziomie zadania, żeby dało się na nie
+      # warunkować kroki poniżej. Puste, dopóki sekrety nie zostaną dodane.
+      TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+      TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
@@ -33,7 +38,21 @@ jobs:
           EMAIL_TO: ${{ secrets.EMAIL_TO }}
         run: python scripts/run_daily_scan.py
 
-      - name: Commit updated snapshot DB
+      # ---------------------------------------------------------------------
+      # PRZEŁĄCZNIK TRYBU — krok poniżej wykonuje się TYLKO dopóki nie ma
+      # sekretu TURSO_DATABASE_URL.
+      #
+      # Tryb stary (bez sekretu): skan zapisuje do pliku data/history.db,
+      # który trzeba wcommitować z powrotem do repo, bo inaczej dane zginą
+      # razem z maszyną. To rozwiązanie ma twardy kres — GitHub odrzuca pliki
+      # powyżej 100 MB, a baza rośnie o ~2,5 MB na skan.
+      #
+      # Tryb nowy (po dodaniu sekretu): skan pisze prosto do bazy zdalnej,
+      # w repo nie zmienia się nic i commitowanie jest zbędne. Przełączenie
+      # następuje samo, bez zmiany tego pliku.
+      # ---------------------------------------------------------------------
+      - name: Commit updated snapshot DB (tylko w trybie lokalnej bazy)
+        if: env.TURSO_DATABASE_URL == ''
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -44,3 +63,7 @@ jobs:
           # nasz commit na wierzch, zamiast pozwolić pushowi się wywalić.
           git pull --rebase origin main
           git push
+
+      - name: Potwierdzenie trybu zdalnego
+        if: env.TURSO_DATABASE_URL != ''
+        run: echo "Baza zdalna (Turso) — pomijam commitowanie pliku do repo."
