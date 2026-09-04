@@ -1,0 +1,11 @@
+# Pliki pośrednie Pythona — powstają przy każdym uruchomieniu/kompilacji
+__pycache__/
+*.py[cod]
+
+# Lokalne środowiska wirtualne
+.venv/
+venv/
+
+# Ustawienia lokalne Streamlita (data/history.db JEST commitowane celowo —
+# patrz README: to obejście ulotnego dysku Streamlit Cloud)
+.streamlit/secrets.toml

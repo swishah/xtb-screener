@@ -152,7 +152,6 @@ def compute_indicators(df: pd.DataFrame, price: float, as_of: pd.Timestamp | Non
 
 def score_row(price: float, ind: dict, fund: dict) -> int:
     """Suma sygnałów kupna — sama technika + potwierdzenie fundamentalne."""
-    sma200 = ind.get("SMA200")
     signals = [
         ind.get("RSI") is not None and ind["RSI"] < 35,
         ind.get("macd_bullish"),
@@ -400,7 +399,7 @@ def generate_brief(row: dict) -> list[str]:
     # --- Trend i technika ----------------------------------------------------
     lines.append("## 📈 Trend i technika")
     price = _num("Cena")
-    sma20, sma50, sma100, sma200 = _num("SMA20"), _num("SMA50"), _num("SMA100"), _num("SMA200")
+    sma20, sma50, sma200 = _num("SMA20"), _num("SMA50"), _num("SMA200")
     if price is not None and sma200 is not None:
         trend = "długoterminowa hossa (cena nad SMA200)" if price > sma200 else "długoterminowa bessa (cena pod SMA200)"
         lines.append(f"Trend długoterminowy: {trend}.")
