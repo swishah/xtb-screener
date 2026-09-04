@@ -1,0 +1,62 @@
+name: Migracja bazy do Turso
+
+# Uruchamiany WYŁĄCZNIE ręcznie, z zakładki Actions. Nie ma harmonogramu —
+# to operacja jednorazowa, choć bezpieczna do powtórzenia (zapis idzie przez
+# INSERT OR REPLACE po kluczu, więc powtórka nadpisuje te same wiersze
+# zamiast je dublować).
+#
+# DLACZEGO TUTAJ, A NIE NA KOMPUTERZE UŻYTKOWNIKA:
+# maszyna GitHuba ma jednocześnie plik data/history.db (jest w repo) oraz
+# sekrety. Dzięki temu token nigdzie nie musi być wklejany poza ustawieniami
+# repozytorium — nie trafia do terminala, do czatu ani do historii poleceń.
+
+on:
+  workflow_dispatch:
+    inputs:
+      potwierdzenie:
+        description: 'Wpisz TAK, żeby potwierdzić migrację do bazy zdalnej'
+        required: true
+        default: 'NIE'
+
+jobs:
+  migracja:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sprawdź potwierdzenie
+        if: github.event.inputs.potwierdzenie != 'TAK'
+        run: |
+          echo "Przerwane — w polu potwierdzenia trzeba wpisać TAK."
+          exit 1
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Zainstaluj zależności
+        run: pip install libsql pandas
+
+      - name: Sprawdź, czy sekrety są ustawione
+        env:
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+        run: |
+          if [ -z "$TURSO_DATABASE_URL" ] || [ -z "$TURSO_AUTH_TOKEN" ]; then
+            echo "BŁĄD: brakuje sekretu TURSO_DATABASE_URL lub TURSO_AUTH_TOKEN."
+            echo "Dodaj oba w Settings → Secrets and variables → Actions, potem uruchom ponownie."
+            exit 1
+          fi
+          echo "Sekrety obecne."
+
+      - name: Przenieś dane
+        env:
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+        run: python scripts/migrate_to_turso.py
+
+      - name: Podsumowanie
+        run: |
+          echo "Migracja zakończona. Od najbliższego skanu dane idą do bazy zdalnej,"
+          echo "a plik data/history.db przestaje rosnąć (zostaje jako kopia zapasowa)."
+          echo "Pamiętaj dodać te same dwa sekrety w Streamlit Cloud, żeby appka czytała stamtąd."
