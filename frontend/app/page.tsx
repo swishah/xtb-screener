@@ -2,20 +2,33 @@ import Link from "next/link";
 import Pasek from "./Pasek";
 import Tabela from "./Tabela";
 import { KATEGORIE } from "./moduly";
-import { migawka, najlepsze, statystyki } from "@/lib/dane";
+import { migawkaBezpieczna, najlepsze, statystyki } from "@/lib/dane";
 
-// Dane zmieniają się raz dziennie po skanie, ale strona ma pokazywać stan
-// aktualny — stąd brak buforowania. Odczyt jednej migawki to jedno zapytanie.
+// Renderowanie na żądanie: strona ma pokazywać stan bazy, a nie zamrożoną
+// wersję z chwili budowania. Powtarzalny koszt odczytu zdejmuje bufor
+// w lib/dane.ts (kwadrans), więc "na żądanie" nie znaczy "za każdym razem
+// od zera".
 export const dynamic = "force-dynamic";
 
 export default async function Pulpit() {
-  const { data, tryb, instrumenty } = await migawka();
+  const { data, tryb, instrumenty, blad } = await migawkaBezpieczna();
   const s = statystyki(instrumenty);
   const top = najlepsze(instrumenty, 8);
 
   return (
     <main className="wrap">
       <Pasek dataMigawki={data} tryb={tryb} />
+
+      {blad && (
+        <div className="alert">
+          <b>Nie udało się wczytać danych.</b> Nawigacja poniżej działa, ale
+          liczby i tabela pozostają puste. Najczęstsza przyczyna to niedostępna
+          baza albo brak zmiennych konfiguracyjnych.
+          <div style={{ marginTop: 8, fontSize: "0.78rem", opacity: 0.75 }}>
+            {blad}
+          </div>
+        </div>
+      )}
 
       <div className="stats">
         <div>

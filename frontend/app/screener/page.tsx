@@ -1,7 +1,7 @@
 import Link from "next/link";
 import Pasek from "../Pasek";
 import Tabela from "../Tabela";
-import { liczba, migawka } from "@/lib/dane";
+import { liczba, migawkaBezpieczna } from "@/lib/dane";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
  * udowodnić, że wzorzec działa na prawdziwych danych.
  */
 export default async function Screener() {
-  const { data, tryb, instrumenty } = await migawka();
+  const { data, tryb, instrumenty, blad } = await migawkaBezpieczna();
 
   const akcje = instrumenty
     .filter((i) => i.Typ === "stock")
@@ -23,6 +23,15 @@ export default async function Screener() {
   return (
     <main className="wrap">
       <Pasek dataMigawki={data} tryb={tryb} />
+
+      {blad && (
+        <div className="alert">
+          <b>Nie udało się wczytać danych.</b>
+          <div style={{ marginTop: 8, fontSize: "0.78rem", opacity: 0.75 }}>
+            {blad}
+          </div>
+        </div>
+      )}
 
       <div className="card">
         <div className="cardhead">
