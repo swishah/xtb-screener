@@ -38,6 +38,12 @@ def _zastosuj_sekrety_streamlit() -> None:
 
 _zastosuj_sekrety_streamlit()
 
+# core/db.py można zaimportować przed st.set_page_config() — w przeciwieństwie
+# do ui.common NIE wykonuje żadnych komend Streamlita przy imporcie (nie ma
+# w nim funkcji z cache'em ani niczego, co rysuje). Jest tu potrzebny wcześnie,
+# bo pytajnik przy tytule pokazuje tryb pracy bazy.
+from core import db  # noqa: E402
+
 # ---------------------------------------------------------------------------
 # KOLEJNOŚĆ W TYM PLIKU JEST ISTOTNA — nie przestawiaj importów na górę!
 #
@@ -71,6 +77,34 @@ with _pomoc:
             "marże, wypłacalność dywidendy). Zero flag nie znaczy „dobra "
             "inwestycja\" — znaczy „nie znaleziono ostrzeżeń\"."
         )
+        st.divider()
+        # Cały blok w try/except, bo dotyka bazy — a nieobsłużony wyjątek
+        # w Streamlicie psuje CAŁĄ stronę, nie tylko ten fragment. Chwilowa
+        # niedostępność bazy zdalnej nie może wywalić appki przez kliknięcie
+        # pytajnika.
+        try:
+            _tryb = db.tryb()
+            _daty = db.list_dates()
+            _ostatnia = _daty[0] if _daty else "brak"
+            if _tryb == "zdalny":
+                st.markdown(
+                    f"**Źródło:** baza zdalna (Turso) · ostatnia migawka: `{_ostatnia}`"
+                )
+            else:
+                st.warning(
+                    f"**Tryb zapasowy — lokalna kopia bazy.** Ostatnia migawka: "
+                    f"`{_ostatnia}`. Dane nie są odświeżane, bo appka nie ma "
+                    f"dostępu do bazy zdalnej (brak sekretów `TURSO_DATABASE_URL` "
+                    f"i `TURSO_AUTH_TOKEN`). To normalne przy uruchomieniu "
+                    f"lokalnym; na produkcji oznacza problem z konfiguracją.",
+                    icon="⚠️",
+                )
+        except Exception as _e:  # noqa: BLE001
+            st.error(
+                f"Nie udało się odczytać stanu bazy: {_e}. Jeśli widzisz to na "
+                f"produkcji, sprawdź sekrety Turso i dostępność usługi.",
+                icon="⚠️",
+            )
 
 # Subtelna, bezpieczna animacja hover na przyciskach/kartach — celuje w klasę
 # .stButton, która jest stabilna w Streamlit od dawna, więc nie powinna się
@@ -91,7 +125,6 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-from core import db  # noqa: E402
 from core.scanner import compute_sentiment_index  # noqa: E402
 from ui.common import (  # noqa: E402
     MODULE_REGISTRY, ALL_MODULE_KEYS, MODULE_CATEGORIES, MODULE_DESCRIPTIONS, _vix_level,
