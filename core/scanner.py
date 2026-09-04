@@ -558,14 +558,15 @@ _SUFFIX_TRADINGVIEW = {
 }
 
 
-def get_tradingview_url(ticker: str) -> str:
+def get_tradingview_url(ticker: str, layout_id: str | None = None) -> str:
     """
-    Link PROSTO do interaktywnego wykresu na TradingView (nie do strony
-    przeglądowej spółki — jeden klik, bez pośredniego ekranu). Najlepszy
-    dostępny szacunek na bazie sufiksu tickera Yahoo Finance — dla mniej
-    popularnych/mniejszych spółek (zwłaszcza spoza dużych giełd) link może
-    czasem nie trafić idealnie; TradingView pokaże wtedy własną wyszukiwarkę
-    zamiast wykresu, zamiast błędu.
+    Link do wykresu na TradingView. Jeśli podano `layout_id` (identyfikator
+    własnego, zapisanego layoutu użytkownika na TradingView — z URL-a jego
+    wykresu, część po /chart/ a przed /?symbol=), link otwiera DOKŁADNIE ten
+    layout z podmienionym tylko symbolem — to jedyny sposób, żeby ominąć
+    przekierowanie TradingView dla niezalogowanych użytkowników na stronę
+    przeglądową spółki zamiast wprost na wykres. Bez layout_id używa
+    ogólnego linku do wykresu (może przekierować niezalogowanych).
     """
     base, exchange = ticker, None
     for suffix, tv_exchange in _SUFFIX_TRADINGVIEW.items():
@@ -573,6 +574,8 @@ def get_tradingview_url(ticker: str) -> str:
             base, exchange = ticker[: -len(suffix)], tv_exchange
             break
     symbol = f"{exchange}:{base}" if exchange else base  # USA i inne bez sufiksu — TradingView sam rozpozna giełdę
+    if layout_id:
+        return f"https://www.tradingview.com/chart/{layout_id}/?symbol={quote(symbol)}"
     return f"https://www.tradingview.com/chart/?symbol={quote(symbol)}"
 
 
@@ -954,6 +957,65 @@ def price_history_for_backtest(ticker: str) -> pd.DataFrame:
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
     return df
+
+
+def analyze_trade(
+    ticker: str, buy_date, buy_price: float,
+    sell_date=None, sell_price: float | None = None, lookback_days: int = 90,
+) -> dict | None:
+    """
+    Analiza pojedynczej transakcji "po fakcie": ile taniej dało się kupić w
+    oknie po zakupie, jakie wskaźniki techniczne były w dniu zakupu (żeby
+    sprawdzić, czy kupno wypadło podczas odbicia czy w realnym dołku), i —
+    jeśli podano sprzedaż — czy sprzedaż nie była zbyt wczesna.
+    Zwraca None, gdy nie da się pobrać/dopasować danych (np. zły ticker).
+    """
+    try:
+        hist = price_history_for_backtest(ticker)
+        if hist.empty:
+            return None
+        if getattr(hist.index, "tz", None) is not None:
+            hist.index = hist.index.tz_localize(None)
+
+        buy_ts = pd.Timestamp(buy_date)
+        hist_upto_buy = hist.loc[:buy_ts]
+        ind_at_buy = compute_indicators(hist, buy_price, as_of=buy_ts) if len(hist_upto_buy) >= 30 else {}
+
+        end_ts = min(buy_ts + pd.Timedelta(days=lookback_days), hist.index.max())
+        if sell_date is not None:
+            end_ts = max(end_ts, pd.Timestamp(sell_date))
+        window = hist.loc[buy_ts:end_ts]
+        if window.empty:
+            return None
+
+        min_after = float(window["Low"].min())
+        min_after_date = window["Low"].idxmin()
+        pct_could_save = round(((min_after - buy_price) / buy_price) * 100, 2)
+
+        result = {
+            "Ticker": ticker,
+            "Data zakupu": buy_ts.date().isoformat(),
+            "Cena zakupu": round(float(buy_price), 2),
+            "Min. cena po zakupie": round(min_after, 2),
+            "Data minimum": pd.Timestamp(min_after_date).date().isoformat(),
+            "Ile taniej mogłeś kupić (%)": pct_could_save,
+            "RSI w dniu zakupu": ind_at_buy.get("RSI"),
+            "% od ATH w dniu zakupu": ind_at_buy.get("pct_from_ath"),
+        }
+
+        if sell_date is not None and sell_price is not None:
+            sell_ts = pd.Timestamp(sell_date)
+            after_sell = hist.loc[sell_ts:]
+            if not after_sell.empty:
+                max_after_sell = float(after_sell["High"].max())
+                pct_missed_upside = round(((max_after_sell - sell_price) / sell_price) * 100, 2)
+                result["Cena sprzedaży"] = round(float(sell_price), 2)
+                result["Maks. cena po sprzedaży"] = round(max_after_sell, 2)
+                result["Niewykorzystany wzrost po sprzedaży (%)"] = pct_missed_upside
+
+        return result
+    except Exception:  # noqa: BLE001
+        return None
 
 
 def get_ticker_news(ticker: str, limit: int = 6) -> list[dict]:
