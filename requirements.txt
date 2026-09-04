@@ -5,3 +5,4 @@ numpy>=1.26
 requests>=2.31
 lxml
 matplotlib>=3.8
+openpyxl>=3.1
