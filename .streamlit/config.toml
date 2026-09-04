@@ -1,0 +1,62 @@
+# =============================================================================
+# Motyw appki — przybliżenie wybranego kierunku UI ("kolorowy pulpit").
+#
+# Docelowy wygląd powstanie dopiero w osobnym frontendzie (faza 02 planu);
+# Streamlit nie pozwala na własny HTML, więc tutaj odtwarzamy tyle, ile się da:
+# paletę, kroje pisma, zaokrąglenia i tryb nocny. Reszta — układ kafelków,
+# własne renderowanie tabel — zostaje na później.
+#
+# Kolory pochodzą wprost z prototypu i muszą się z nim zgadzać, żeby przejście
+# na nowy frontend nie było skokiem wizualnym.
+# =============================================================================
+
+[theme]
+# Kroje przez odnośnik do Google Fonts — celowo NIE przez [[theme.fontFaces]]
+# z adresami plików .woff2. Tamte adresy zmieniają się przy aktualizacjach
+# fontu i kiedyś po cichu przestałyby działać, zostawiając systemowy zamiennik.
+font = "Plus Jakarta Sans:https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;800&display=swap, sans-serif"
+headingFont = "Plus Jakarta Sans:https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;800&display=swap, sans-serif"
+codeFont = "IBM Plex Mono:https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&display=swap, monospace"
+
+baseRadius = "0.75rem"
+buttonRadius = "0.75rem"
+showWidgetBorder = true
+
+# --- motyw jasny -------------------------------------------------------------
+[theme.light]
+backgroundColor = "#F6F7F9"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#12151A"
+primaryColor = "#2C4BD8"
+linkColor = "#2C4BD8"
+borderColor = "#E4E7EB"
+dataframeHeaderBackgroundColor = "#EEF0F3"
+
+# Paleta nazwana — używana m.in. przez kolorowanie tabel i wykresy.
+# Barwy odpowiadają kategoriom modułów z prototypu.
+blueColor = "#2C4BD8"
+greenColor = "#14804A"
+orangeColor = "#B25A14"
+violetColor = "#5B3BB8"
+yellowColor = "#77620F"
+grayColor = "#666E7A"
+
+# --- motyw ciemny ------------------------------------------------------------
+# Przełącznik jasny/ciemny siedzi w menu Streamlita (trzy kropki w prawym
+# górnym rogu → Settings → Appearance). Domyślnie appka idzie za ustawieniem
+# systemowym urządzenia.
+[theme.dark]
+backgroundColor = "#0F1115"
+secondaryBackgroundColor = "#161A20"
+textColor = "#E8EAEE"
+primaryColor = "#6E8CFF"
+linkColor = "#8AA5FF"
+borderColor = "#272E38"
+dataframeHeaderBackgroundColor = "#1A1F27"
+
+blueColor = "#8AA5FF"
+greenColor = "#5CC790"
+orangeColor = "#E2A164"
+violetColor = "#AC90F2"
+yellowColor = "#CFBB5E"
+grayColor = "#949CA9"
