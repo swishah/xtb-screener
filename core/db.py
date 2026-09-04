@@ -25,6 +25,7 @@ w GitHub Actions, gdzie streamlita nie ma.
 from __future__ import annotations
 
 import json
+import math
 import os
 import sqlite3
 from datetime import date
@@ -110,12 +111,57 @@ def _zamknij(conn) -> None:
         pass
 
 
+def _bez_nan(wartosc):
+    """
+    Zamienia NaN i nieskończoności na None, rekurencyjnie.
+
+    DLACZEGO TO ISTNIEJE: json.dumps domyślnie zapisuje je jako gołe `NaN`
+    i `Infinity`. Python odczyta taki tekst z powrotem bez mrugnięcia, ale to
+    NIE JEST poprawny JSON — standard tych literałów nie zna. JSON.parse
+    w JavaScripcie odrzuca cały dokument.
+
+    Skutek był taki, że frontend widział 9 instrumentów z 1346, a 1337 cicho
+    wypadało. Błąd siedział w danych od początku projektu i nie dało się go
+    zauważyć, dopóki bazy nie czytał drugi język.
+    """
+    if isinstance(wartosc, float) and not math.isfinite(wartosc):
+        return None
+    if isinstance(wartosc, dict):
+        return {k: _bez_nan(v) for k, v in wartosc.items()}
+    if isinstance(wartosc, (list, tuple)):
+        return [_bez_nan(v) for v in wartosc]
+    return wartosc
+
+
 def save_snapshot(scan_date: str, rows: list[dict]) -> None:
+    """
+    Zapisuje migawkę. Wiersz, którego nie da się zserializować do POPRAWNEGO
+    JSON-a, jest pomijany z komunikatem — zamiast wywalać cały skan (co
+    kosztowałoby dzień danych) albo, co gorsza, zapisywać tekst, którego
+    frontend nie odczyta.
+    """
+    do_zapisu = []
+    pominiete = []
+    for r in rows:
+        try:
+            # allow_nan=False celowo: gdyby sanityzator czegoś nie złapał,
+            # chcemy o tym wiedzieć tutaj, a nie zobaczyć brakujące spółki
+            # w interfejsie za trzy tygodnie.
+            payload = json.dumps(_bez_nan(r), default=str, allow_nan=False)
+        except (ValueError, TypeError) as e:
+            pominiete.append(f"{r.get('Ticker', '?')} ({e})")
+            continue
+        do_zapisu.append((scan_date, r["Ticker"], payload))
+
+    if pominiete:
+        print(f"⚠️ Pominięto {len(pominiete)} instrumentów przy zapisie: "
+              f"{', '.join(pominiete[:5])}{' ...' if len(pominiete) > 5 else ''}")
+
     conn = get_conn()
     try:
         conn.executemany(
             "INSERT OR REPLACE INTO snapshots (scan_date, ticker, payload) VALUES (?, ?, ?)",
-            [(scan_date, r["Ticker"], json.dumps(r, default=str)) for r in rows],
+            do_zapisu,
         )
         _zatwierdz(conn)
     finally:

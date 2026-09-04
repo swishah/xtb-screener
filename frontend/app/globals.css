@@ -1,0 +1,293 @@
+/* =============================================================================
+   TOKENY — jedyne źródło prawdy dla kolorów, krojów i odstępów.
+   Przeniesione z zatwierdzonego prototypu ("kolorowy pulpit"), żeby frontend
+   i appka Streamlit wyglądały jak jeden produkt, a nie dwa różne.
+
+   Motyw jasny jest bazą w :root. Ciemny nadpisuje SAME ZMIENNE w dwóch
+   miejscach, bo widz ma trzy stany, nie dwa:
+     1. nie wybrał nic   → decyduje ustawienie systemu (@media),
+     2. wybrał ciemny    → [data-theme="dark"],
+     3. wybrał jasny     → [data-theme="light"] wygrywa nawet przy ciemnym systemie.
+   ========================================================================== */
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --raised: #ffffff;
+  --line: #e4e7eb;
+  --line-2: #eef0f3;
+  --fg: #12151a;
+  --muted: #666e7a;
+  --accent: #2c4bd8;
+  --on-accent: #ffffff;
+  --down: #c0392e;
+  --pill-bg: #eef0f3;
+  --pill-fg: #666e7a;
+  --good-bg: #e6f3ec;
+  --good-fg: #14804a;
+  --lift: 0 5px 16px rgba(18, 24, 40, 0.1);
+  --ring: rgba(44, 75, 216, 0.35);
+
+  /* kategorie modułów — kolor niesie znaczenie, nie ozdobę */
+  --k1-bg: #eaf0fd; --k1-fg: #2c4bd8;  /* przegląd rynku */
+  --k2-bg: #e8f4ee; --k2-fg: #14804a;  /* strategie      */
+  --k3-bg: #fdf0e7; --k3-fg: #b25a14;  /* analiza spółki */
+  --k4-bg: #f4f1e4; --k4-fg: #77620f;  /* dywidendy      */
+  --k5-bg: #f2edfb; --k5-fg: #5b3bb8;  /* moje           */
+  --k6-bg: #e9f3f6; --k6-fg: #116379;  /* backtesty      */
+
+  --mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --sans: "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1115;
+    --surface: #161a20;
+    --raised: #1a1f27;
+    --line: #272e38;
+    --line-2: #1f252e;
+    --fg: #e8eaee;
+    --muted: #949ca9;
+    --accent: #6e8cff;
+    --on-accent: #0f1115;
+    --down: #f27b70;
+    --pill-bg: #232a34;
+    --pill-fg: #a4acb9;
+    --good-bg: #16301f;
+    --good-fg: #5bc98a;
+    --lift: 0 6px 20px rgba(0, 0, 0, 0.45);
+    --ring: rgba(110, 140, 255, 0.45);
+
+    --k1-bg: #161f3a; --k1-fg: #8aa5ff;
+    --k2-bg: #132720; --k2-fg: #5cc790;
+    --k3-bg: #2b1f13; --k3-fg: #e2a164;
+    --k4-bg: #272310; --k4-fg: #cfbb5e;
+    --k5-bg: #211a35; --k5-fg: #ac90f2;
+    --k6-bg: #112630; --k6-fg: #66bcd6;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #0f1115;
+  --surface: #161a20;
+  --raised: #1a1f27;
+  --line: #272e38;
+  --line-2: #1f252e;
+  --fg: #e8eaee;
+  --muted: #949ca9;
+  --accent: #6e8cff;
+  --on-accent: #0f1115;
+  --down: #f27b70;
+  --pill-bg: #232a34;
+  --pill-fg: #a4acb9;
+  --good-bg: #16301f;
+  --good-fg: #5bc98a;
+  --lift: 0 6px 20px rgba(0, 0, 0, 0.45);
+  --ring: rgba(110, 140, 255, 0.45);
+
+  --k1-bg: #161f3a; --k1-fg: #8aa5ff;
+  --k2-bg: #132720; --k2-fg: #5cc790;
+  --k3-bg: #2b1f13; --k3-fg: #e2a164;
+  --k4-bg: #272310; --k4-fg: #cfbb5e;
+  --k5-bg: #211a35; --k5-fg: #ac90f2;
+  --k6-bg: #112630; --k6-fg: #66bcd6;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { color-scheme: light dark; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--sans);
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: inherit; text-decoration: none; }
+
+.wrap { max-width: 1080px; margin: 0 auto; padding: 20px 16px 64px; }
+
+/* ---------- pasek górny ---------- */
+.bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.brand {
+  font-size: clamp(1.3rem, 3.6vw, 1.8rem);
+  font-weight: 800; letter-spacing: -0.025em; margin: 0;
+}
+.stamp {
+  font-family: var(--mono); font-size: 0.74rem; color: var(--muted);
+  border: 1px solid var(--line); padding: 3px 9px; border-radius: 6px;
+  white-space: nowrap;
+}
+.tools { margin-left: auto; display: flex; gap: 8px; }
+.icobtn {
+  width: 36px; height: 36px; flex: none; cursor: pointer;
+  border: 1px solid var(--line); background: var(--surface);
+  color: var(--muted); border-radius: 9px;
+  font: 600 0.92rem inherit; display: grid; place-items: center;
+}
+.icobtn:hover { color: var(--accent); border-color: var(--accent); }
+.icobtn:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.icobtn svg {
+  width: 17px; height: 17px; fill: none; stroke: currentColor;
+  stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+}
+
+/* Ikona pokazuje, DOKĄD przeniesie kliknięcie: księżyc w trybie jasnym,
+   słońce w ciemnym. Trzy stany widza obsłużone osobno. Widocznością steruje
+   wyłącznie CSS — atrybut style wpisany w znaczniku wygrywa z arkuszem
+   i przycisk zostawał pusty (błąd złapany w prototypie). */
+.ico-moon { display: block; }
+.ico-sun { display: none; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .ico-moon { display: none; }
+  :root:not([data-theme="light"]) .ico-sun { display: block; }
+}
+:root[data-theme="dark"] .ico-moon { display: none; }
+:root[data-theme="dark"] .ico-sun { display: block; }
+:root[data-theme="light"] .ico-moon { display: block; }
+:root[data-theme="light"] .ico-sun { display: none; }
+
+.panel {
+  border: 1px solid var(--line); background: var(--surface);
+  border-radius: 12px; padding: 14px 16px; margin-top: 12px;
+  font-size: 0.86rem; color: var(--muted); max-width: 72ch;
+}
+.panel b { color: var(--fg); }
+.panel[hidden] { display: none; }
+
+/* ---------- ostrzeżenie o trybie zapasowym ---------- */
+.alert {
+  border: 1px solid var(--down); border-left: 4px solid var(--down);
+  background: var(--surface); border-radius: 10px;
+  padding: 12px 14px; margin-top: 14px; font-size: 0.88rem;
+}
+.alert b { color: var(--fg); }
+
+/* ---------- pasek liczb ---------- */
+.stats { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0 6px; }
+.stats > div {
+  flex: 1 1 120px; background: var(--surface); border: 1px solid var(--line);
+  border-radius: 12px; padding: 12px 14px;
+}
+.stats b {
+  display: block; font-family: var(--mono); font-weight: 600;
+  font-size: clamp(1.2rem, 3vw, 1.5rem);
+  font-variant-numeric: tabular-nums; line-height: 1.15;
+}
+.stats span {
+  font-size: 0.73rem; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+
+/* ---------- nawigacja kafelkami ---------- */
+.grouphead {
+  display: flex; align-items: center; gap: 9px; margin: 22px 0 9px;
+  font-size: 0.72rem; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.09em; color: var(--muted);
+}
+.grouphead::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.dot { width: 9px; height: 9px; border-radius: 3px; flex: none; }
+
+.modules {
+  display: grid; gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(172px, 1fr));
+}
+.mod {
+  display: flex; flex-direction: column; gap: 2px; text-align: left;
+  padding: 14px 15px; font-family: inherit; color: var(--fg);
+  background: var(--m-bg); border: 0; border-left: 4px solid var(--m-fg);
+  border-radius: 12px; transition: transform 0.12s, box-shadow 0.12s;
+}
+a.mod:hover { transform: translateY(-2px); box-shadow: var(--lift); }
+.mod:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.mod b { font-size: 0.96rem; font-weight: 800; letter-spacing: -0.015em; color: var(--m-fg); }
+.mod span { font-size: 0.76rem; color: var(--muted); }
+.mod.wkrotce { opacity: 0.5; cursor: default; }
+.mod .znacznik {
+  font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--muted); margin-top: 4px;
+}
+
+.k1 { --m-bg: var(--k1-bg); --m-fg: var(--k1-fg); }
+.k2 { --m-bg: var(--k2-bg); --m-fg: var(--k2-fg); }
+.k3 { --m-bg: var(--k3-bg); --m-fg: var(--k3-fg); }
+.k4 { --m-bg: var(--k4-bg); --m-fg: var(--k4-fg); }
+.k5 { --m-bg: var(--k5-bg); --m-fg: var(--k5-fg); }
+.k6 { --m-bg: var(--k6-bg); --m-fg: var(--k6-fg); }
+
+/* ---------- karta z tabelą ---------- */
+.card {
+  margin-top: 26px; background: var(--surface); border: 1px solid var(--line);
+  border-radius: 14px; overflow: hidden;
+}
+.cardhead { display: flex; align-items: baseline; gap: 10px; padding: 14px 16px 12px; flex-wrap: wrap; }
+.cardhead h2 { margin: 0; font-size: 0.98rem; font-weight: 800; letter-spacing: -0.015em; }
+.cardhead em { font-style: normal; font-size: 0.76rem; color: var(--muted); }
+.cardhead a.link { margin-left: auto; font-size: 0.79rem; color: var(--accent); font-weight: 600; }
+.cardhead a.link:hover { text-decoration: underline; }
+
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; min-width: 560px; }
+th {
+  text-align: left; font-size: 0.7rem; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--muted); padding: 9px 16px;
+  border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
+  background: var(--line-2); white-space: nowrap;
+}
+th.r, td.r { text-align: right; }
+td { padding: 12px 16px; border-bottom: 1px solid var(--line); font-size: 0.93rem; }
+tbody tr:last-child td { border-bottom: none; }
+td.t { font-weight: 800; letter-spacing: -0.01em; }
+td.t small { display: block; font-weight: 400; font-size: 0.79rem; color: var(--muted); letter-spacing: 0; }
+td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.down { color: var(--down); }
+.brak { color: var(--muted); opacity: 0.65; }
+.pill {
+  display: inline-block; font-family: var(--mono); font-size: 0.74rem;
+  font-weight: 600; padding: 2px 8px; border-radius: 6px;
+  background: var(--pill-bg); color: var(--pill-fg);
+}
+.pill.good { background: var(--good-bg); color: var(--good-fg); }
+
+footer {
+  margin-top: 26px; padding-top: 14px; border-top: 1px solid var(--line);
+  font-size: 0.77rem; color: var(--muted); max-width: 80ch;
+}
+
+/* ---------- telefon ----------
+   Tabela rozpada się na karty. Reguła z fazy 01: przewijanie tabeli kursów
+   w poziomie jednym kciukiem to najszybszy sposób na porzucenie appki. */
+@media (max-width: 720px) {
+  .modules { grid-template-columns: repeat(auto-fill, minmax(146px, 1fr)); }
+  .stats > div { flex-basis: 44%; }
+
+  .scroll { overflow-x: visible; }
+  table { min-width: 0; }
+  thead { display: none; }
+  table, tbody, tr, td { display: block; width: 100%; }
+  tbody tr {
+    border-bottom: 1px solid var(--line);
+    padding: 12px 16px 13px;
+    display: grid; grid-template-columns: 1fr auto; gap: 2px 12px;
+  }
+  tbody td { border: none; padding: 0; font-size: 1rem; }
+  td.t { grid-column: 1; grid-row: 1; font-size: 1.05rem; }
+  td.cena { grid-column: 2; grid-row: 1; text-align: right; font-weight: 600; font-size: 1.05rem; }
+  td.rsi { grid-column: 2; grid-row: 2; text-align: right; }
+  td.ath { grid-column: 2; grid-row: 3; text-align: right; }
+  td.score { grid-column: 1; grid-row: 2; }
+  td.flagi { grid-column: 1; grid-row: 3; margin-top: 4px; }
+  td.pe, td.dyw { display: none; }
+  td.rsi::before, td.ath::before, td.score::before {
+    content: attr(data-l);
+    font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--muted); margin-right: 7px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
