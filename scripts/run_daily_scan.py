@@ -17,7 +17,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from config.markets import STOCK_GROUPS, ETF_MAP  # noqa: E402
 from core.scanner import analyze_group, get_sp500_map, get_sp400_map, STRATEGIES  # noqa: E402
-from core.db import save_snapshot, list_dates, load_snapshot  # noqa: E402
+from core.db import (  # noqa: E402
+    save_snapshot, list_dates, load_snapshot, wlasne_wg_typu,
+)
 from core.alerts import check_top10_newcomers  # noqa: E402
 
 
@@ -33,10 +35,25 @@ def main() -> None:
         print(f"🔄 {label} ({len(ticker_map)} tickerów)...")
         all_rows.extend(analyze_group(ticker_map, kind="stock", label=label, market_override=label))
 
-    print(f"🔄 ETF-y ({len(ETF_MAP)})...")
+    # Instrumenty dopisane ręcznie przez użytkownika. Bez market_override —
+    # rynek rozpoznaje się po sufiksie tickera, bo mogą pochodzić z dowolnej
+    # giełdy.
+    wlasne_akcje = wlasne_wg_typu("stock")
+    if wlasne_akcje:
+        print(f"🔄 Własne akcje ({len(wlasne_akcje)})...")
+        all_rows.extend(analyze_group(wlasne_akcje, kind="stock", label="Własne"))
+
+    etfy = dict(ETF_MAP)
+    etfy.update(wlasne_wg_typu("etf"))
+    print(f"🔄 ETF-y ({len(etfy)})...")
     # bez market_override — ETF-y mają zróżnicowane giełdy notowania, więc
     # kraj/rynek jest rozpoznawany po sufiksie tickera (patrz infer_market)
-    all_rows.extend(analyze_group(ETF_MAP, kind="etf", label="ETF"))
+    all_rows.extend(analyze_group(etfy, kind="etf", label="ETF"))
+
+    wlasne_indeksy = wlasne_wg_typu("index")
+    if wlasne_indeksy:
+        print(f"🔄 Własne indeksy ({len(wlasne_indeksy)})...")
+        all_rows.extend(analyze_group(wlasne_indeksy, kind="index", label="Indeksy"))
 
     # Migawka sprzed dzisiejszego zapisu — to jest nasze "wczoraj" do porównania.
     prior_dates = list_dates()

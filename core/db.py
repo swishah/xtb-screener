@@ -61,6 +61,20 @@ SCHEMA_STATEMENTS = [
         value TEXT NOT NULL
     )
     """,
+    # Instrumenty dopisane ręcznie przez użytkownika — uniwersum ze składów
+    # indeksów zawsze będzie niepełne i zawsze się starzeje.
+    #
+    # ticker jako KLUCZ GŁÓWNY to nie ozdoba: baza sama odrzuca duplikat,
+    # więc nawet gdyby sprawdzenie w interfejsie kiedyś zawiodło, ten sam
+    # instrument nie trafi na listę dwa razy.
+    """
+    CREATE TABLE IF NOT EXISTS wlasne_instrumenty (
+        ticker TEXT PRIMARY KEY,
+        nazwa TEXT NOT NULL,
+        typ TEXT NOT NULL,
+        dodano TEXT NOT NULL
+    )
+    """,
 ]
 
 
@@ -312,3 +326,73 @@ def delete_preference(key: str) -> None:
         _zatwierdz(conn)
     finally:
         _zamknij(conn)
+
+
+# =============================================================================
+# WŁASNE INSTRUMENTY
+#
+# Uniwersum budowane ze składów indeksów zawsze będzie niepełne: XTB oferuje
+# ~1900 ETF-ów, a my mamy 69; nowe spółki wchodzą na giełdę, stare zmieniają
+# nazwy. Ta lista pozwala dopisać instrument bez ruszania kodu — trafia do
+# skanu następnego dnia razem z resztą.
+# =============================================================================
+
+TYPY_INSTRUMENTOW = ("stock", "etf", "index")
+
+
+def dodaj_wlasny(ticker: str, nazwa: str, typ: str) -> bool:
+    """
+    Dopisuje instrument. Zwraca False, gdy już istnieje — świadomie NIE
+    nadpisujemy, bo to znaczyłoby ciche zastąpienie nazwy albo typu wpisanego
+    wcześniej przez użytkownika.
+    """
+    ticker = ticker.strip().upper()
+    if not ticker or typ not in TYPY_INSTRUMENTOW:
+        return False
+
+    conn = get_conn()
+    try:
+        istnieje = conn.execute(
+            "SELECT 1 FROM wlasne_instrumenty WHERE ticker = ?", (ticker,)
+        ).fetchone()
+        if istnieje:
+            return False
+        conn.execute(
+            "INSERT INTO wlasne_instrumenty (ticker, nazwa, typ, dodano) VALUES (?, ?, ?, ?)",
+            (ticker, nazwa.strip() or ticker, typ, date.today().isoformat()),
+        )
+        _zatwierdz(conn)
+        return True
+    finally:
+        _zamknij(conn)
+
+
+def usun_wlasny(ticker: str) -> None:
+    conn = get_conn()
+    try:
+        conn.execute(
+            "DELETE FROM wlasne_instrumenty WHERE ticker = ?", (ticker.strip().upper(),)
+        )
+        _zatwierdz(conn)
+    finally:
+        _zamknij(conn)
+
+
+def wlasne_instrumenty() -> list[dict]:
+    """Lista dopisanych instrumentów, od najnowszego."""
+    conn = get_conn()
+    try:
+        wiersze = conn.execute(
+            "SELECT ticker, nazwa, typ, dodano FROM wlasne_instrumenty "
+            "ORDER BY dodano DESC, ticker"
+        ).fetchall()
+    finally:
+        _zamknij(conn)
+    return [
+        {"ticker": w[0], "nazwa": w[1], "typ": w[2], "dodano": w[3]} for w in wiersze
+    ]
+
+
+def wlasne_wg_typu(typ: str) -> dict[str, str]:
+    """Mapa {ticker: nazwa} dla jednego typu — w formacie, którego oczekuje skan."""
+    return {i["ticker"]: i["nazwa"] for i in wlasne_instrumenty() if i["typ"] == typ}

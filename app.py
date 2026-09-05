@@ -143,6 +143,7 @@ from ui.watchlist import render_watchlist  # noqa: E402
 from ui.trade_review import render_trade_review  # noqa: E402
 from ui.bt_strategy import render_bt_strategy  # noqa: E402
 from ui.backtest import render_backtest  # noqa: E402
+from ui.wlasne import render_wlasne  # noqa: E402
 
 
 if not db.get_preference("onboarding_done", False):
@@ -224,6 +225,7 @@ RENDER_FUNCS = {
     "trade_review": render_trade_review,
     "bt_strategy": render_bt_strategy,
     "backtest": render_backtest,
+    "wlasne": render_wlasne,
 }
 
 

@@ -600,6 +600,80 @@ def yahoo_price_scale(ticker: str) -> float:
     return skala
 
 
+def sprawdz_instrument(ticker: str) -> dict:
+    """
+    Sprawdza, czy Yahoo Finance zna podany instrument, ZANIM trafi on na listę
+    do skanowania.
+
+    Bez tego kroku literówka albo ticker w formacie XTB (ALE.PL zamiast ALE.WA)
+    wchodziłaby na listę i cicho wypadała przy każdym nocnym skanie — użytkownik
+    widziałby, że instrument jest dodany, ale nigdy by się nie pojawił w tabeli.
+
+    Sprawdzamy HISTORIĘ NOTOWAŃ, nie samo info: dla nieistniejących symboli
+    Yahoo potrafi zwrócić pusty słownik zamiast błędu, a bywa i tak, że oddaje
+    nazwę bez żadnych danych cenowych.
+
+    Zwraca słownik z kluczem "ok" oraz — przy powodzeniu — nazwą, ceną, walutą
+    i rozpoznanym typem. Przy niepowodzeniu podaje powód i ewentualną
+    propozycję poprawionego tickera.
+    """
+    surowy = str(ticker or "").strip().upper()
+    if not surowy:
+        return {"ok": False, "powod": "Pusty ticker."}
+
+    def _sprobuj(symbol: str) -> dict | None:
+        try:
+            tk = yf.Ticker(symbol)
+            hist = tk.history(period="1mo")
+            if hist.empty:
+                return None
+            # Ostatni wiersz bywa pusty (sesja w toku, dzień bez obrotu),
+            # więc bierzemy ostatnie ZAMKNIĘCIE Z WARTOŚCIĄ. Bez tego
+            # użytkownik widział cenę „nan” przy poprawnym instrumencie
+            # i słusznie uznałby, że coś jest nie tak.
+            zamkniecia = hist["Close"].dropna()
+            if zamkniecia.empty:
+                return None
+            info = tk.info or {}
+            typ_yahoo = str(info.get("quoteType", "")).upper()
+            typ = {"ETF": "etf", "INDEX": "index", "MUTUALFUND": "etf"}.get(
+                typ_yahoo, "stock"
+            )
+            return {
+                "ok": True,
+                "ticker": symbol,
+                "nazwa": info.get("longName") or info.get("shortName") or symbol,
+                "cena": round(float(zamkniecia.iloc[-1]), 2),
+                "waluta": info.get("currency", ""),
+                "typ": typ,
+                "gielda": info.get("exchange", ""),
+            }
+        except Exception:  # noqa: BLE001
+            return None
+
+    wynik = _sprobuj(surowy)
+    if wynik:
+        return wynik
+
+    # Druga próba po przetłumaczeniu z formatu XTB — użytkownik ma tickery
+    # z platformy pod ręką i naturalnie wkleja właśnie je.
+    przetlumaczony = xtb_to_yahoo(surowy)
+    if przetlumaczony != surowy:
+        wynik = _sprobuj(przetlumaczony)
+        if wynik:
+            wynik["poprawiony_z"] = surowy
+            return wynik
+
+    return {
+        "ok": False,
+        "powod": (
+            f"Yahoo Finance nie zwraca notowań dla „{surowy}”. Sprawdź pisownię "
+            f"i sufiks giełdy — polskie spółki mają .WA (np. ALE.WA), niemieckie "
+            f".DE, amerykańskie żadnego."
+        ),
+    }
+
+
 def xtb_to_yahoo(ticker: str) -> str:
     """
     Tłumaczy symbol z eksportu XTB na symbol Yahoo Finance (ALE.PL -> ALE.WA).

@@ -500,6 +500,15 @@ ALL_NAMES.update(ETF_MAP)
 ALL_NAMES.update(sp500_map)
 ALL_NAMES.update(sp400_map)
 
+# Instrumenty dopisane ręcznie. Bez tego nie pojawiłyby się na listach wyboru
+# w Profilu spółki czy Watchliście, mimo że skan zbiera dla nich dane.
+# Odczyt owinięty w try, bo przy pierwszym uruchomieniu tabela może jeszcze
+# nie istnieć, a to nie może wywalić całej appki.
+try:
+    ALL_NAMES.update({i["ticker"]: i["nazwa"] for i in db.wlasne_instrumenty()})
+except Exception:  # noqa: BLE001
+    pass
+
 # ---------------------------------------------------------------------------
 # Rejestr modułów (zakładek) — pozwala użytkownikowi wybrać, które moduły
 # w ogóle chce mieć widoczne. Funkcje render_* są zdefiniowane niżej w pliku;
@@ -519,6 +528,7 @@ MODULE_REGISTRY = [
     ("trade_review", "📉 Analiza transakcji"),
     ("bt_strategy", "📈 Backtest strategii"),
     ("backtest", "⏪ Backtest spółki"),
+    ("wlasne", "➕ Własne instrumenty"),
 ]
 ALL_MODULE_KEYS = [key for key, _ in MODULE_REGISTRY]
 
@@ -536,6 +546,7 @@ MODULE_CATEGORIES = [
     ("Dywidendy",       "#8C7415", ["dividends"]),
     ("Moje",            "#7A5AD8", ["watchlist", "trade_review"]),
     ("Backtesty",       "#1A7E97", ["bt_strategy", "backtest"]),
+    ("Ustawienia",      "#6B7280", ["wlasne"]),
 ]
 
 # Moduł nieprzypisany do żadnej kategorii NIE zniknie z nawigacji — trafi do
@@ -557,4 +568,5 @@ MODULE_DESCRIPTIONS = {
     "trade_review": "Wgraj historię swoich transakcji (np. z XTB) i zobacz, ile taniej mogłeś kupić.",
     "bt_strategy": "Sprawdzenie historycznej skuteczności każdej strategii.",
     "backtest": "Szczegóły jednej spółki wstecz w czasie + najnowsze newsy.",
+    "wlasne": "Dopisz ticker, którego nie ma w uniwersum — trafi do skanu.",
 }
