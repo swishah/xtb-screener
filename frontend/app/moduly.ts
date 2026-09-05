@@ -36,7 +36,7 @@ export const KATEGORIE: Kategoria[] = [
     etykieta: "Strategie",
     klasa: "k2",
     moduly: [
-      { nazwa: "Strategie", opis: "5 gotowych rankingów", sciezka: null },
+      { nazwa: "Strategie", opis: "5 gotowych rankingów", sciezka: "/strategie" },
       { nazwa: "Własny scoring", opis: "Twoje wagi wskaźników", sciezka: null },
     ],
   },

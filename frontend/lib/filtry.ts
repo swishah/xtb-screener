@@ -82,6 +82,36 @@ export function wartosci(instrumenty: Instrument[], kolumna: string): string[] {
   return [...zbior].sort((a, b) => a.localeCompare(b, "pl"));
 }
 
+/**
+ * Rozstrzyganie remisów w rankingach.
+ *
+ * DLACZEGO TO ISTNIEJE: wyniki strategii są całkowite i niskie (skale 7-13),
+ * więc remisów jest mnóstwo — w migawce z 2026-09-04 czternaście spółek miało
+ * komplet 10/10 w Deep Value, a piętnaście 7/7 w Dywidendowej. Bez jawnej
+ * reguły o tym, kto stoi wyżej, decydowała kolejność wierszy z bazy: czołówka
+ * wyglądałaby na przypadkową i mogła się zmieniać między odświeżeniami.
+ * Przy narzędziu, na podstawie którego podejmuje się decyzje, to niedopuszczalne.
+ *
+ * Kolejność kryteriów jest merytoryczna, nie techniczna:
+ *   1. mniej czerwonych flag — przy równym wyniku wybieramy spółkę
+ *      z mniejszą liczbą ostrzeżeń,
+ *   2. wyższy Buy Score — więcej sygnałów technicznych zagrało,
+ *   3. ticker alfabetycznie — wyłącznie po to, żeby wynik był powtarzalny.
+ */
+export function porownajRemis(a: Instrument, b: Instrument): number {
+  const fa = liczba(a["Liczba flag"]);
+  const fb = liczba(b["Liczba flag"]);
+  if (fa !== fb) {
+    if (fa === null) return 1;
+    if (fb === null) return -1;
+    return fa - fb;
+  }
+  const sa = liczba(a["Buy Score"]) ?? -1;
+  const sb = liczba(b["Buy Score"]) ?? -1;
+  if (sa !== sb) return sb - sa;
+  return String(a.Ticker ?? "").localeCompare(String(b.Ticker ?? ""), "pl");
+}
+
 export function filtruj(instrumenty: Instrument[], f: Filtry): Instrument[] {
   const szukaj = f.szukaj.trim().toLowerCase();
 
@@ -119,10 +149,11 @@ export function filtruj(instrumenty: Instrument[], f: Filtry): Instrument[] {
     const y = liczba(b[spec.klucz]);
     // Brak wartości zawsze na koniec, niezależnie od kierunku sortowania —
     // "BRAK" nie może udawać najlepszego ani najgorszego wyniku.
-    if (x === null && y === null) return 0;
+    if (x === null && y === null) return porownajRemis(a, b);
     if (x === null) return 1;
     if (y === null) return -1;
-    return spec.rosnaco ? x - y : y - x;
+    const roznica = spec.rosnaco ? x - y : y - x;
+    return roznica !== 0 ? roznica : porownajRemis(a, b);
   });
 }
 

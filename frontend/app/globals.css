@@ -262,6 +262,36 @@ a.mod:hover { transform: translateY(-2px); box-shadow: var(--lift); }
   .filtry input { font-size: 16px; }
 }
 
+/* ---------- wybór strategii ---------- */
+.wybor { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.wybor-poz {
+  padding: 9px 13px; border-radius: 10px; font-size: 0.87rem; font-weight: 600;
+  background: var(--surface); border: 1px solid var(--line); color: var(--muted);
+}
+.wybor-poz:hover { color: var(--fg); border-color: var(--k2-fg); }
+.wybor-poz.aktywna {
+  background: var(--k2-bg); border-color: transparent;
+  border-left: 4px solid var(--k2-fg); color: var(--k2-fg);
+}
+.opis-strategii {
+  margin: 12px 0 0; max-width: 78ch;
+  font-size: 0.88rem; color: var(--muted);
+}
+
+/* ---------- miernik wyniku ----------
+   Wynik podany dwa razy: jako proporcja dla oka i jako liczba dla umysłu.
+   Bez maksimum sama liczba nic nie mówi — 7 to dużo przy skali 8, mało przy 13. */
+.miernik { display: inline-flex; align-items: center; gap: 9px; justify-content: flex-end; }
+.miernik-tor {
+  width: 54px; height: 7px; border-radius: 4px;
+  background: var(--pill-bg); overflow: hidden; flex: none;
+}
+.miernik-wypelnienie { display: block; height: 100%; background: var(--k2-fg); }
+.miernik-liczba {
+  font-family: var(--mono); font-weight: 600; font-size: 0.88rem;
+  white-space: nowrap; min-width: 5ch; text-align: right;
+}
+
 /* ---------- karta z tabelą ---------- */
 .card {
   margin-top: 26px; background: var(--surface); border: 1px solid var(--line);
@@ -334,4 +364,30 @@ footer {
 
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
+}
+
+/* ---------- telefon: tabela strategii ----------
+   Ta tabela ma ZMIENNY zestaw kolumn, więc nie da się jej rozłożyć regułami
+   pisanymi pod konkretne komórki, jak tabelę Screenera. Zamiast tego każda
+   komórka sama pokazuje swoją etykietę z atrybutu data-l. */
+@media (max-width: 720px) {
+  .tab-strategia tbody tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px 14px;
+    padding: 14px 16px 15px;
+  }
+  .tab-strategia td { text-align: left; font-size: 0.95rem; }
+  .tab-strategia td.t { grid-column: 1 / -1; font-size: 1.05rem; }
+  .tab-strategia td.wynik { grid-column: 1 / -1; }
+  .tab-strategia td[data-l]::before {
+    content: attr(data-l);
+    display: block;
+    font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--muted); margin-bottom: 2px;
+  }
+  .tab-strategia td.wynik::before { content: none; }
+  .tab-strategia .miernik { justify-content: flex-start; }
+  .tab-strategia .miernik-tor { width: 90px; height: 9px; }
+  .wybor-poz { flex: 1 1 100%; }
 }
