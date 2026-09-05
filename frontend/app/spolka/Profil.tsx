@@ -27,9 +27,10 @@ function Rekomendacja({ spolka }: { spolka: Instrument }) {
   if (brakDanych) {
     return (
       <p className="pusto">
-        Brak rekomendacji — ani w konsensusie Yahoo, ani wśród polskich domów
-        maklerskich. To normalne przy mniejszych spółkach spoza USA i nie mówi
-        nic o jakości biznesu.
+        Brak rekomendacji — sprawdzamy trzy źródła (Yahoo, stockanalysis.com
+        i polskie domy maklerskie) i żadne nie pokrywa tej spółki. To normalne
+        przy mniejszych spółkach i przy ETF-ach; nie mówi nic o jakości
+        biznesu.
       </p>
     );
   }
@@ -39,7 +40,8 @@ function Rekomendacja({ spolka }: { spolka: Instrument }) {
       ? ((cel - cena) / cena) * 100
       : null;
 
-  // Skan zapisuje źródło w postaci "biznesradar (BM mBank, BOS DM)".
+  // Skan zapisuje źródło jako "Yahoo", "stockanalysis" albo
+  // "biznesradar (BM mBank, BOS DM)" — trzy różne metody liczenia.
   const zrodlo = String(spolka["Źródło rekomendacji"] ?? "");
   const zBiznesradar = zrodlo.startsWith("biznesradar");
   const domy = zBiznesradar ? (zrodlo.match(/\(([^)]+)\)/)?.[1] ?? "") : "";
@@ -80,6 +82,14 @@ function Rekomendacja({ spolka }: { spolka: Instrument }) {
             konsensus Yahoo: kilka polskich rekomendacji zamiast dziesiątek
             analityków. Uzupełniamy nią spółki, których Yahoo nie pokrywa —
             dotyczy to większości polskiej giełdy.
+          </>
+        ) : zrodlo === "stockanalysis" ? (
+          <>
+            Źródło: <b>stockanalysis.com</b> — uśredniony konsensus analityków,
+            ta sama metodologia co Yahoo, więc wartości są porównywalne.
+            Używamy go tam, gdzie Yahoo nie ma danych — dotyczy to sporej
+            części giełd europejskich. Konsensus bywa spóźniony i przesunięty
+            w stronę rekomendacji „kupuj”.
           </>
         ) : (
           <>

@@ -22,12 +22,78 @@ from core.db import (  # noqa: E402
 )
 from core.alerts import check_top10_newcomers  # noqa: E402
 from core.rekomendacje import rekomendacje_gpw  # noqa: E402
+from core.rekomendacje_swiat import uzupelnij as rekomendacje_swiat  # noqa: E402
 
+
+
+def _uzupelnij_rekomendacje(rows: list[dict]) -> None:
+    """
+    Uzupełnia rekomendacje analityków z dwóch dodatkowych źródeł.
+
+    KOLEJNOŚĆ ŹRÓDEŁ JEST CELOWA i wynika z metodologii, nie z wygody:
+
+    1. **Yahoo** — konsensus wielu analityków. Zostaje wszędzie tam, gdzie
+       jest; niczego nie nadpisujemy.
+    2. **stockanalysis.com** — też konsensus wielu analityków, więc wartości
+       są PORÓWNYWALNE z Yahoo. Stąd drugie miejsce. Pokrywa Londyn,
+       Frankfurt, Mediolan, Wiedeń, Lizbonę, Warszawę i kilka innych giełd,
+       na których Yahoo ma dziury (Londyn: 35% pokrycia).
+    3. **biznesradar.pl** — pojedyncze rekomendacje polskich domów
+       maklerskich. INNA metodologia (kilka rekomendacji zamiast konsensusu
+       kilkunastu analityków), więc dopiero na końcu — dla mniejszych spółek
+       z GPW, których nie zna żadne z poprzednich źródeł.
+
+    Przy każdej wartości zapisujemy źródło w osobnej kolumnie. Bez tego
+    użytkownik widziałby jedną liczbę „rekomendacja” pochodzącą z trzech
+    różnych metod liczenia i nie miałby jak tego odróżnić.
+    """
+    _uzupelnij_ze_swiata(rows)
+    _uzupelnij_rekomendacje_gpw(rows)
+
+
+def _uzupelnij_ze_swiata(rows: list[dict]) -> None:
+    """
+    Konsensus ze stockanalysis.com dla spółek, których Yahoo nie pokrywa.
+
+    Odpytujemy WYŁĄCZNIE spółki z faktyczną luką — to jedno zapytanie na
+    spółkę, więc lista bez filtrowania oznaczałaby 1300 zapytań zamiast ~150.
+    """
+    braki: list[tuple[str, float | None]] = []
+    for r in rows:
+        if _ma_rekomendacje(r):
+            continue
+        try:
+            kurs = float(r.get("Cena"))
+        except (TypeError, ValueError):
+            kurs = None
+        braki.append((str(r.get("Ticker", "")), kurs))
+
+    if not braki:
+        return
+
+    dane = rekomendacje_swiat(braki)
+    if not dane:
+        print("ℹ️ Rekomendacje świat: brak danych ze źródła — pomijam.")
+        return
+
+    for r in rows:
+        d = dane.get(str(r.get("Ticker", "")))
+        if not d or _ma_rekomendacje(r):
+            continue
+        r["Rekomendacja analityków"] = d["rekomendacja"]
+        r["Liczba analityków"] = d["liczba"]
+        if d["cena_docelowa"] is not None:
+            r["Cena docelowa (analitycy)"] = d["cena_docelowa"]
+        r["Źródło rekomendacji"] = "stockanalysis"
+        r["Rekomendacja z dnia"] = "BRAK"
+
+    print(f"🌍 Rekomendacje świat: uzupełniono {len(dane)} spółek "
+          f"(sprawdzono {len(braki)}).")
 
 
 def _uzupelnij_rekomendacje_gpw(rows: list[dict]) -> None:
     """
-    Dokłada rekomendacje domów maklerskich tam, gdzie Yahoo ich nie ma.
+    Dokłada rekomendacje domów maklerskich tam, gdzie nadal nic nie ma.
 
     Yahoo pokrywa 90% spółek z S&P 500, ale tylko 15% ze sWIG80 — bez
     rekomendacji zostają nawet mBank, Orange Polska czy Inter Cars. Jedno
@@ -44,12 +110,15 @@ def _uzupelnij_rekomendacje_gpw(rows: list[dict]) -> None:
         print("ℹ️ Rekomendacje GPW: brak danych ze źródła — pomijam uzupełnianie.")
         for r in rows:
             r.setdefault("Źródło rekomendacji", "Yahoo" if _ma_rekomendacje(r) else "BRAK")
+            r.setdefault("Rekomendacja z dnia", "BRAK")
         return
 
     uzupelnione = 0
     for r in rows:
         if _ma_rekomendacje(r):
-            r["Źródło rekomendacji"] = "Yahoo"
+            # Puste źródło znaczy, że wartość przyszła z Yahoo — poprzednia
+            # warstwa podpisuje swoje wpisy sama.
+            r.setdefault("Źródło rekomendacji", "Yahoo")
             r.setdefault("Rekomendacja z dnia", "BRAK")
             continue
 
@@ -109,7 +178,7 @@ def main() -> None:
         print(f"🔄 Własne indeksy ({len(wlasne_indeksy)})...")
         all_rows.extend(analyze_group(wlasne_indeksy, kind="index", label="Indeksy"))
 
-    _uzupelnij_rekomendacje_gpw(all_rows)
+    _uzupelnij_rekomendacje(all_rows)
 
     # Migawka sprzed dzisiejszego zapisu — to jest nasze "wczoraj" do porównania.
     prior_dates = list_dates()

@@ -150,7 +150,7 @@ INDICATOR_HELP: dict[str, str] = {
     "52-tyg. minimum": "Najniższa cena w ciągu ostatnich 12 miesięcy.",
     "Cena docelowa (analitycy)": "Średnia cena docelowa wg analityków śledzących spółkę — konsensus rynkowy, nie gwarancja.",
     "Rekomendacja analityków": "Skrócona rekomendacja konsensusu (Kupuj/Trzymaj/Sprzedaj).",
-    "Źródło rekomendacji": "Skąd pochodzi rekomendacja. \"Yahoo\" to uśredniony konsensus wielu analityków; \"biznesradar\" to pojedyncze rekomendacje polskich domów maklerskich (ich nazwy w nawiasie) — inna metodologia, używana tam, gdzie Yahoo nie ma danych.",
+    "Źródło rekomendacji": "Skąd pochodzi rekomendacja. \"Yahoo\" i \"stockanalysis\" to uśredniony konsensus wielu analityków — te dwa są porównywalne. \"biznesradar\" to pojedyncze rekomendacje polskich domów maklerskich (nazwy w nawiasie), czyli inna metodologia; używane dopiero tam, gdzie pozostałe dwa nie mają danych.",
     "Rekomendacja z dnia": "Data najnowszej rekomendacji. Wypełniana tylko dla źródła biznesradar — Yahoo nie podaje daty konsensusu.",
     "Liczba analityków": "Ilu analityków wydało rekomendację — więcej zwykle oznacza bardziej wiarygodny konsensus.",
     "% udziałów instytucji": "Jaki % akcji jest w rękach funduszy/inwestorów instytucjonalnych.",
