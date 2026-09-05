@@ -21,6 +21,60 @@ from core.db import (  # noqa: E402
     save_snapshot, list_dates, load_snapshot, wlasne_wg_typu,
 )
 from core.alerts import check_top10_newcomers  # noqa: E402
+from core.rekomendacje import rekomendacje_gpw  # noqa: E402
+
+
+
+def _uzupelnij_rekomendacje_gpw(rows: list[dict]) -> None:
+    """
+    Dokłada rekomendacje domów maklerskich tam, gdzie Yahoo ich nie ma.
+
+    Yahoo pokrywa 90% spółek z S&P 500, ale tylko 15% ze sWIG80 — bez
+    rekomendacji zostają nawet mBank, Orange Polska czy Inter Cars. Jedno
+    zapytanie do biznesradar.pl uzupełnia całą polską giełdę naraz.
+
+    NADPISUJEMY WYŁĄCZNIE PUSTE POLA. Gdzie Yahoo ma konsensus, tam zostaje —
+    to dwie różne metodologie (konsensus wielu analityków kontra pojedyncze
+    rekomendacje domów maklerskich) i mieszanie ich dałoby liczbę, której nie
+    da się zinterpretować. Źródło zapisujemy w osobnej kolumnie, żeby przy
+    każdej wartości było wiadomo, skąd pochodzi.
+    """
+    dane = rekomendacje_gpw()
+    if not dane:
+        print("ℹ️ Rekomendacje GPW: brak danych ze źródła — pomijam uzupełnianie.")
+        for r in rows:
+            r.setdefault("Źródło rekomendacji", "Yahoo" if _ma_rekomendacje(r) else "BRAK")
+        return
+
+    uzupelnione = 0
+    for r in rows:
+        if _ma_rekomendacje(r):
+            r["Źródło rekomendacji"] = "Yahoo"
+            r.setdefault("Rekomendacja z dnia", "BRAK")
+            continue
+
+        d = dane.get(str(r.get("Ticker", "")))
+        if not d:
+            r["Źródło rekomendacji"] = "BRAK"
+            r["Rekomendacja z dnia"] = "BRAK"
+            continue
+
+        r["Rekomendacja analityków"] = d["rekomendacja"]
+        r["Liczba analityków"] = d["liczba"]
+        if d["cena_docelowa"] is not None:
+            r["Cena docelowa (analitycy)"] = d["cena_docelowa"]
+        r["Źródło rekomendacji"] = f"biznesradar ({d['domy']})"
+        r["Rekomendacja z dnia"] = d["ostatnia"]
+        uzupelnione += 1
+
+    print(f"📊 Rekomendacje GPW: uzupełniono {uzupelnione} spółek "
+          f"(źródło zna {len(dane)}).")
+
+
+def _ma_rekomendacje(r: dict) -> bool:
+    """Czy Yahoo podał cokolwiek sensownego."""
+    w = str(r.get("Rekomendacja analityków", "")).strip().lower()
+    return w not in ("", "brak", "nan", "none")
 
 
 def main() -> None:
@@ -54,6 +108,8 @@ def main() -> None:
     if wlasne_indeksy:
         print(f"🔄 Własne indeksy ({len(wlasne_indeksy)})...")
         all_rows.extend(analyze_group(wlasne_indeksy, kind="index", label="Indeksy"))
+
+    _uzupelnij_rekomendacje_gpw(all_rows)
 
     # Migawka sprzed dzisiejszego zapisu — to jest nasze "wczoraj" do porównania.
     prior_dates = list_dates()

@@ -33,7 +33,8 @@ INDICATOR_GROUPS: dict[str, list[str]] = {
     ],
     "Prognozy analityków i ryzyko": [
         "Beta", "52-tyg. maksimum", "52-tyg. minimum", "Cena docelowa (analitycy)",
-        "Rekomendacja analityków", "Liczba analityków", "% udziałów instytucji",
+        "Rekomendacja analityków", "Źródło rekomendacji",
+        "Rekomendacja z dnia", "Liczba analityków", "% udziałów instytucji",
     ],
     "Scoring": [
         "Buy Score", "Score: Deep Value", "Score: Momentum",
@@ -149,6 +150,8 @@ INDICATOR_HELP: dict[str, str] = {
     "52-tyg. minimum": "Najniższa cena w ciągu ostatnich 12 miesięcy.",
     "Cena docelowa (analitycy)": "Średnia cena docelowa wg analityków śledzących spółkę — konsensus rynkowy, nie gwarancja.",
     "Rekomendacja analityków": "Skrócona rekomendacja konsensusu (Kupuj/Trzymaj/Sprzedaj).",
+    "Źródło rekomendacji": "Skąd pochodzi rekomendacja. \"Yahoo\" to uśredniony konsensus wielu analityków; \"biznesradar\" to pojedyncze rekomendacje polskich domów maklerskich (ich nazwy w nawiasie) — inna metodologia, używana tam, gdzie Yahoo nie ma danych.",
+    "Rekomendacja z dnia": "Data najnowszej rekomendacji. Wypełniana tylko dla źródła biznesradar — Yahoo nie podaje daty konsensusu.",
     "Liczba analityków": "Ilu analityków wydało rekomendację — więcej zwykle oznacza bardziej wiarygodny konsensus.",
     "% udziałów instytucji": "Jaki % akcji jest w rękach funduszy/inwestorów instytucjonalnych.",
     "Buy Score": "Suma podstawowych sygnałów technicznych kupna (RSI, MACD, trend, wolumen, dystans od ATH).",
@@ -162,7 +165,7 @@ TEXT_COLUMNS = {
     "Ticker", "Nazwa", "Rynek", "Typ", "Sektor", "Branża", "Waluta",
     "Czerwone flagi", "Poprzednia dywidenda", "Przyszła dywidenda",
     "Dyw. w poprzednim roku", "Dyw. w tym roku",
-    "smc", "Rekomendacja analityków",
+    "smc", "Rekomendacja analityków", "Źródło rekomendacji", "Rekomendacja z dnia",
 }
 
 DEFAULT_SCREENER_COLUMNS = [

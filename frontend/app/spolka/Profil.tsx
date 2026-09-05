@@ -27,8 +27,9 @@ function Rekomendacja({ spolka }: { spolka: Instrument }) {
   if (brakDanych) {
     return (
       <p className="pusto">
-        Żaden analityk nie pokrywa tej spółki w danych Yahoo. To normalne przy
-        mniejszych spółkach spoza USA i nie mówi nic o jakości biznesu.
+        Brak rekomendacji — ani w konsensusie Yahoo, ani wśród polskich domów
+        maklerskich. To normalne przy mniejszych spółkach spoza USA i nie mówi
+        nic o jakości biznesu.
       </p>
     );
   }
@@ -38,12 +39,21 @@ function Rekomendacja({ spolka }: { spolka: Instrument }) {
       ? ((cel - cena) / cena) * 100
       : null;
 
+  // Skan zapisuje źródło w postaci "biznesradar (BM mBank, BOS DM)".
+  const zrodlo = String(spolka["Źródło rekomendacji"] ?? "");
+  const zBiznesradar = zrodlo.startsWith("biznesradar");
+  const domy = zBiznesradar ? (zrodlo.match(/\(([^)]+)\)/)?.[1] ?? "") : "";
+  const suroweData = String(spolka["Rekomendacja z dnia"] ?? "");
+  const dataRek = suroweData && suroweData !== "BRAK" ? suroweData : "";
+
   return (
     <div className="rek">
       <div className="rek-poz">
         <span className="rek-etykieta">Konsensus</span>
         <strong>{rek}</strong>
-        <span className="brak">{ilu} analityków</span>
+        <span className="brak">
+          {ilu} {zBiznesradar ? "rekomendacji" : "analityków"}
+        </span>
       </div>
       {cel !== null && (
         <div className="rek-poz">
@@ -62,8 +72,22 @@ function Rekomendacja({ spolka }: { spolka: Instrument }) {
         </div>
       )}
       <p className="pusto" style={{ marginTop: 6 }}>
-        Konsensus analityków bywa spóźniony i przesunięty w stronę rekomendacji
-        „kupuj” — traktuj jako jedną z przesłanek, nie rozstrzygnięcie.
+        {zBiznesradar ? (
+          <>
+            Źródło: <b>biznesradar.pl</b> — pojedyncze rekomendacje domów
+            maklerskich{domy ? ` (${domy})` : ""}
+            {dataRek ? `, najnowsza z ${dataRek}` : ""}. To INNA metodologia niż
+            konsensus Yahoo: kilka polskich rekomendacji zamiast dziesiątek
+            analityków. Uzupełniamy nią spółki, których Yahoo nie pokrywa —
+            dotyczy to większości polskiej giełdy.
+          </>
+        ) : (
+          <>
+            Źródło: <b>Yahoo Finance</b> — uśredniony konsensus analityków.
+            Bywa spóźniony i przesunięty w stronę rekomendacji „kupuj”, więc
+            traktuj jako jedną z przesłanek, nie rozstrzygnięcie.
+          </>
+        )}
       </p>
     </div>
   );
