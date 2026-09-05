@@ -56,7 +56,9 @@ export default async function Screener({
   const wybrana = wybranyTicker
     ? instrumenty.find((i) => String(i.Ticker ?? "").toUpperCase() === wybranyTicker)
     : undefined;
-  const newsy = wybrana ? await newsySpolki(String(wybrana.Ticker)) : [];
+  const newsy = wybrana
+    ? await newsySpolki(String(wybrana.Ticker), String(wybrana.Nazwa ?? ""))
+    : [];
 
   /** Adres zachowujący filtry i podmieniający tylko wybraną spółkę. */
   function adresZeSpolka(ticker: string): string {

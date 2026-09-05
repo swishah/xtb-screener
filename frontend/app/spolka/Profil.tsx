@@ -166,10 +166,9 @@ export default function Profil({
           </ul>
         ) : (
           <p className="pusto">
-            Brak newsów przypisanych do tego instrumentu. Yahoo ma pokrycie
-            praktycznie wyłącznie dla spółek amerykańskich — dla europejskich
-            zwraca artykuły o innych firmach o podobnej nazwie, więc świadomie
-            wolimy nie pokazać nic niż pokazać cudze.
+            Brak artykułów z ostatniego miesiąca, w których tytule pada nazwa
+            tej spółki. Wymóg nazwy w tytule jest celowy — bez niego przy
+            wieloznacznych nazwach trafiały tu teksty o zupełnie innych firmach.
           </p>
         )}
       </section>

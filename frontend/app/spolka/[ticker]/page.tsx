@@ -25,7 +25,9 @@ export default async function StronaSpolki({
 
   // Newsy pobieramy dopiero po znalezieniu spółki — nie ma sensu odpytywać
   // Yahoo o ticker, którego nie ma w migawce.
-  const newsy = spolka ? await newsySpolki(String(spolka.Ticker)) : [];
+  const newsy = spolka
+    ? await newsySpolki(String(spolka.Ticker), String(spolka.Nazwa ?? ""))
+    : [];
 
   const cena = spolka ? liczba(spolka.Cena) : null;
   const zmiana = spolka ? liczba(spolka["Zmiana ceny (1Y%)"]) : null;
