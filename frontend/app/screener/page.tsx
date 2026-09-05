@@ -3,12 +3,12 @@ import { Suspense } from "react";
 import Pasek from "../Pasek";
 import Tabela from "../Tabela";
 import PanelFiltrow from "./Filtry";
-import Profil from "../spolka/Profil";
+import PanelSpolki from "../PanelSpolki";
 import WykresPelny from "../spolka/WykresPelny";
 import { migawkaBezpieczna } from "@/lib/dane";
 import { newsySpolki } from "@/lib/newsy";
 import { symbolTradingView } from "@/lib/tradingview";
-import { liczba, FILTRY_DOMYSLNE, filtruj, wartosci, type Filtry } from "@/lib/filtry";
+import { FILTRY_DOMYSLNE, filtruj, wartosci, type Filtry } from "@/lib/filtry";
 
 export const dynamic = "force-dynamic";
 
@@ -86,9 +86,6 @@ export default async function Screener({
     ? instrumenty.find((i) => String(i.Ticker ?? "").toUpperCase() === wykresTicker)
     : undefined;
 
-  const cena = wybrana ? liczba(wybrana.Cena) : null;
-  const zmiana = wybrana ? liczba(wybrana["Zmiana ceny (1Y%)"]) : null;
-
   return (
     <main className="wrap wrap-szeroki">
       <Pasek dataMigawki={data} tryb={tryb} />
@@ -129,40 +126,12 @@ export default async function Screener({
         </div>
 
         {wybrana && (
-          <aside className="panel-spolki">
-            <div className="panel-spolki-naglowek">
-              <div>
-                <h2>{String(wybrana.Ticker)}</h2>
-                <p className="spolka-nazwa">
-                  {String(wybrana.Nazwa ?? "")}
-                  {wybrana.Sektor ? ` · ${String(wybrana.Sektor)}` : ""}
-                </p>
-              </div>
-              <div className="spolka-cena">
-                {cena !== null && (
-                  <strong>
-                    {cena.toLocaleString("pl-PL", { maximumFractionDigits: 2 })}{" "}
-                    <span className="brak">{String(wybrana.Waluta ?? "")}</span>
-                  </strong>
-                )}
-                {zmiana !== null && (
-                  <span className={zmiana < 0 ? "down" : "up"}>
-                    {zmiana > 0 ? "+" : ""}
-                    {zmiana.toLocaleString("pl-PL", { maximumFractionDigits: 1 })}% / rok
-                  </span>
-                )}
-              </div>
-              <Link className="panel-zamknij" href={adres({ wybrana: null })} aria-label="Zamknij panel">
-                ✕
-              </Link>
-            </div>
-
-            <Profil spolka={wybrana} wszystkie={instrumenty} newsy={newsy} kompaktowy />
-
-            <Link className="link" href={`/spolka/${encodeURIComponent(String(wybrana.Ticker))}`}>
-              Otwórz na pełnej stronie →
-            </Link>
-          </aside>
+          <PanelSpolki
+            spolka={wybrana}
+            wszystkie={instrumenty}
+            newsy={newsy}
+            adresZamkniecia={adres({ wybrana: null })}
+          />
         )}
       </div>
 

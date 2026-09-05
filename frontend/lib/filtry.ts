@@ -188,3 +188,37 @@ export function najlepsze(instrumenty: Instrument[], ile = 10): Instrument[] {
     .sort((a, b) => (liczba(b["Buy Score"]) ?? 0) - (liczba(a["Buy Score"]) ?? 0))
     .slice(0, ile);
 }
+
+
+/**
+ * Zielone flagi — lustro green_flags() z core/scanner.py.
+ *
+ * Dopełnienie czerwonych flag. Przy niskiej wycenie to one rozstrzygają
+ * najważniejsze pytanie tego modułu: czy tanio, bo okazja, czy tanio, bo
+ * rynek słusznie wycenia problemy. Progi te same co po stronie Pythona —
+ * rozjazd dawałby dwie różne odpowiedzi na to samo pytanie.
+ */
+export function zieloneFlagi(s: Instrument): string[] {
+  const flagi: string[] = [];
+  const roe = liczba(s["ROE (%)"]);
+  if (roe !== null && roe > 15) flagi.push(`Wysokie ROE (${roe}%)`);
+
+  const marza = liczba(s["Marża Operac. (%)"]);
+  if (marza !== null && marza > 15) flagi.push(`Solidna marża operacyjna (${marza}%)`);
+
+  const dlug = liczba(s["Dług/Kapitał"]);
+  if (dlug !== null && dlug < 50) flagi.push(`Niskie zadłużenie (${dlug}%)`);
+
+  const przychody = liczba(s["Wzrost przychodów (%)"]);
+  if (przychody !== null && przychody > 5) flagi.push(`Rosnące przychody (+${przychody}%)`);
+
+  const eps = liczba(s["Wzrost EPS (%)"]);
+  if (eps !== null && eps > 5) flagi.push(`Rosnący zysk na akcję (+${eps}%)`);
+
+  const lata = liczba(s["Lata z dywidendą (3Y)"]);
+  if (lata !== null && lata >= 3) flagi.push("Nieprzerwana dywidenda przez 3 lata");
+
+  if (liczba(s["Liczba flag"]) === 0) flagi.push("Zero czerwonych flag");
+
+  return flagi;
+}

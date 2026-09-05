@@ -1,5 +1,5 @@
 import Wskaznik from "./Wskaznik";
-import { liczba, type Instrument } from "@/lib/filtry";
+import { liczba, zieloneFlagi, type Instrument } from "@/lib/filtry";
 import { statystykiSektora } from "@/lib/sektor";
 import type { News } from "@/lib/newsy";
 import {
@@ -93,6 +93,7 @@ export default function Profil({
   // jak flaga, a znaczy jej brak.
   const suroweFlagi = String(spolka["Czerwone flagi"] ?? "").trim();
   const flagi = suroweFlagi.toLowerCase() === "brak" ? "" : suroweFlagi;
+  const mocneStrony = zieloneFlagi(spolka);
 
   return (
     <div className={kompaktowy ? "profil profil-kompakt" : "profil"}>
@@ -106,6 +107,17 @@ export default function Profil({
               .map((f, i) => (
                 <li key={i}>{f}</li>
               ))}
+          </ul>
+        </section>
+      )}
+
+      {mocneStrony.length > 0 && (
+        <section className="sekcja">
+          <h3>Mocne strony</h3>
+          <ul className="flagi-lista flagi-zielone">
+            {mocneStrony.map((f) => (
+              <li key={f}>{f}</li>
+            ))}
           </ul>
         </section>
       )}

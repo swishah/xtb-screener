@@ -623,3 +623,29 @@ th.kol-wykres, td.kol-wykres { width: 1%; white-space: nowrap; text-align: cente
   td.kol-wykres::before { content: none; }
   .spolka-akcje { margin-left: 0; }
 }
+
+/* ---------- moduł Tanie vs sektor ---------- */
+.flagi-zielone li { color: var(--good-fg); }
+.tab-tanie td.sektor-kom { font-size: 0.85rem; }
+.tab-tanie td.sektor-kom small {
+  display: block; font-size: 0.74rem; color: var(--muted);
+}
+.tab-tanie td.mocne-kom { font-size: 0.82rem; max-width: 260px; }
+.mocne-licznik { font-weight: 600; }
+
+@media (max-width: 720px) {
+  .tab-tanie tbody tr {
+    display: grid; grid-template-columns: 1fr auto; gap: 4px 12px;
+    padding: 13px 16px 14px;
+  }
+  .tab-tanie td { text-align: left; padding: 0; border: none; }
+  .tab-tanie td.t { grid-column: 1; grid-row: 1; font-size: 1.05rem; }
+  .tab-tanie td.kol-wykres { grid-column: 2; grid-row: 1; text-align: right; }
+  .tab-tanie td[data-l]::before {
+    content: attr(data-l) " ";
+    font-family: var(--mono); font-size: 0.64rem; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--muted);
+  }
+  .tab-tanie td.sektor-kom { grid-column: 1 / -1; }
+  .tab-tanie td.mocne-kom { grid-column: 1 / -1; max-width: none; }
+}

@@ -46,7 +46,7 @@ export const KATEGORIE: Kategoria[] = [
     moduly: [
       { nazwa: "Profil spółki", opis: "Wybierz spółkę w screenerze", sciezka: "/screener" },
       { nazwa: "vs Sektor", opis: "Na tle mediany branży", sciezka: null },
-      { nazwa: "Tanie vs sektor", opis: "Niskie C/Z w swoim sektorze", sciezka: null },
+      { nazwa: "Tanie vs sektor", opis: "Niskie C/Z w swoim sektorze", sciezka: "/tanie" },
     ],
   },
   {
