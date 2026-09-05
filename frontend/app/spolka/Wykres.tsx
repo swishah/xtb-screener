@@ -25,7 +25,14 @@ const INTERWALY = [
   { klucz: "M", etykieta: "1M" },
 ];
 
-export default function Wykres({ symbol }: { symbol: string }) {
+export default function Wykres({
+  symbol,
+  pelnyEkran = false,
+}: {
+  symbol: string;
+  /** Na pełnym ekranie ramka rośnie do wysokości okna. */
+  pelnyEkran?: boolean;
+}) {
   const kontener = useRef<HTMLDivElement>(null);
   const [interwal, setInterwal] = useState("D");
 
@@ -79,7 +86,7 @@ export default function Wykres({ symbol }: { symbol: string }) {
   }
 
   return (
-    <div className="wykres">
+    <div className={pelnyEkran ? "wykres wykres-pelny" : "wykres"}>
       <div className="wykres-pasek">
         <span className="wykres-symbol">{symbol}</span>
         <div className="wykres-interwaly">

@@ -1,8 +1,6 @@
 import Wskaznik from "./Wskaznik";
-import Wykres from "./Wykres";
 import { liczba, type Instrument } from "@/lib/filtry";
 import { statystykiSektora } from "@/lib/sektor";
-import { symbolTradingView } from "@/lib/tradingview";
 import type { News } from "@/lib/newsy";
 import {
   GRUPY,
@@ -95,12 +93,9 @@ export default function Profil({
   // jak flaga, a znaczy jej brak.
   const suroweFlagi = String(spolka["Czerwone flagi"] ?? "").trim();
   const flagi = suroweFlagi.toLowerCase() === "brak" ? "" : suroweFlagi;
-  const symbol = symbolTradingView(String(spolka.Ticker ?? ""));
 
   return (
     <div className={kompaktowy ? "profil profil-kompakt" : "profil"}>
-      <Wykres symbol={symbol} />
-
       {flagi && (
         <section className="sekcja">
           <h3>Czerwone flagi</h3>

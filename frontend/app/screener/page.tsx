@@ -4,8 +4,10 @@ import Pasek from "../Pasek";
 import Tabela from "../Tabela";
 import PanelFiltrow from "./Filtry";
 import Profil from "../spolka/Profil";
+import WykresPelny from "../spolka/WykresPelny";
 import { migawkaBezpieczna } from "@/lib/dane";
 import { newsySpolki } from "@/lib/newsy";
+import { symbolTradingView } from "@/lib/tradingview";
 import { liczba, FILTRY_DOMYSLNE, filtruj, wartosci, type Filtry } from "@/lib/filtry";
 
 export const dynamic = "force-dynamic";
@@ -60,26 +62,29 @@ export default async function Screener({
     ? await newsySpolki(String(wybrana.Ticker), String(wybrana.Nazwa ?? ""))
     : [];
 
-  /** Adres zachowujący filtry i podmieniający tylko wybraną spółkę. */
-  function adresZeSpolka(ticker: string): string {
+  /**
+   * Adres zachowujący wszystkie filtry i zmieniający tylko jeden parametr.
+   * Dzięki temu otwarcie wykresu nie gubi wybranej spółki, a zamknięcie
+   * panelu nie gubi wykresu.
+   */
+  function adres(zmiany: Record<string, string | null>): string {
     const p = new URLSearchParams();
     for (const [k, v] of Object.entries(q)) {
       const w = Array.isArray(v) ? v[0] : v;
-      if (w && k !== "wybrana") p.set(k, w);
+      if (w) p.set(k, w);
     }
-    p.set("wybrana", ticker);
-    return `/screener?${p.toString()}`;
-  }
-
-  function adresBezSpolki(): string {
-    const p = new URLSearchParams();
-    for (const [k, v] of Object.entries(q)) {
-      const w = Array.isArray(v) ? v[0] : v;
-      if (w && k !== "wybrana") p.set(k, w);
+    for (const [k, v] of Object.entries(zmiany)) {
+      if (v === null) p.delete(k);
+      else p.set(k, v);
     }
     const s = p.toString();
     return s ? `/screener?${s}` : "/screener";
   }
+
+  const wykresTicker = (jeden("wykres") ?? "").toUpperCase();
+  const doWykresu = wykresTicker
+    ? instrumenty.find((i) => String(i.Ticker ?? "").toUpperCase() === wykresTicker)
+    : undefined;
 
   const cena = wybrana ? liczba(wybrana.Cena) : null;
   const zmiana = wybrana ? liczba(wybrana["Zmiana ceny (1Y%)"]) : null;
@@ -115,7 +120,12 @@ export default async function Screener({
 
       <div className={wybrana ? "uklad-z-panelem" : undefined}>
         <div className="card" style={{ marginTop: 12 }}>
-          <Tabela wiersze={widoczne} link={adresZeSpolka} wybrany={wybranyTicker} />
+          <Tabela
+            wiersze={widoczne}
+            link={(t) => adres({ wybrana: t })}
+            linkWykres={(t) => adres({ wykres: t })}
+            wybrany={wybranyTicker}
+          />
         </div>
 
         {wybrana && (
@@ -142,7 +152,7 @@ export default async function Screener({
                   </span>
                 )}
               </div>
-              <Link className="panel-zamknij" href={adresBezSpolki()} aria-label="Zamknij panel">
+              <Link className="panel-zamknij" href={adres({ wybrana: null })} aria-label="Zamknij panel">
                 ✕
               </Link>
             </div>
@@ -169,6 +179,15 @@ export default async function Screener({
         liczone podczas codziennego skanu; „BRAK” znaczy, że Yahoo nie podało
         danej wartości.
       </footer>
+
+      {doWykresu && (
+        <WykresPelny
+          ticker={String(doWykresu.Ticker)}
+          nazwa={String(doWykresu.Nazwa ?? "")}
+          symbol={symbolTradingView(String(doWykresu.Ticker ?? ""))}
+          adresZamkniecia={adres({ wykres: null })}
+        />
+      )}
     </main>
   );
 }

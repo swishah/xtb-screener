@@ -21,6 +21,7 @@ function fmt(wartosc: unknown, cyfry = 2, sufiks = ""): React.ReactNode {
 export default function Tabela({
   wiersze,
   link,
+  linkWykres,
   wybrany,
 }: {
   wiersze: Instrument[];
@@ -30,6 +31,11 @@ export default function Tabela({
    * tickery zostają zwykłym tekstem.
    */
   link?: (ticker: string) => string;
+  /**
+   * Adres otwierający wykres na pełnym ekranie. Osobno od "link", bo to dwie
+   * różne intencje: profil obok listy i wykres na cały ekran.
+   */
+  linkWykres?: (ticker: string) => string;
   wybrany?: string;
 }) {
   if (wiersze.length === 0) {
@@ -46,6 +52,7 @@ export default function Tabela({
         <thead>
           <tr>
             <th>Spółka</th>
+            {linkWykres && <th className="kol-wykres">Wykres</th>}
             <th className="r">Cena</th>
             <th className="r">RSI</th>
             <th className="r">Od ATH</th>
@@ -76,6 +83,21 @@ export default function Tabela({
                     </>
                   )}
                 </td>
+                {linkWykres && (
+                  <td className="kol-wykres">
+                    <Link
+                      href={linkWykres(ticker)}
+                      className="btn-wykres"
+                      aria-label={`Wykres ${ticker}`}
+                      title="Pokaż wykres na pełnym ekranie"
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M3 3v18h18" />
+                        <path d="M7 14l4-5 3 3 5-7" />
+                      </svg>
+                    </Link>
+                  </td>
+                )}
                 <td className="r n cena">
                   {fmt(w.Cena)} <span className="brak">{String(w.Waluta ?? "")}</span>
                 </td>

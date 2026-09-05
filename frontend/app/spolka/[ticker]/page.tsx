@@ -2,18 +2,24 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import Pasek from "../../Pasek";
 import Profil from "../Profil";
+import WykresPelny from "../WykresPelny";
 import { migawkaBezpieczna } from "@/lib/dane";
 import { liczba } from "@/lib/filtry";
 import { newsySpolki } from "@/lib/newsy";
+import { symbolTradingView } from "@/lib/tradingview";
 
 export const dynamic = "force-dynamic";
 
 export default async function StronaSpolki({
   params,
+  searchParams,
 }: {
   params: Promise<{ ticker: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { ticker } = await params;
+  const q = await searchParams;
+  const pokazWykres = (Array.isArray(q.wykres) ? q.wykres[0] : q.wykres) === "1";
   const szukany = decodeURIComponent(ticker).toUpperCase();
 
   const { data, tryb, instrumenty, blad } = await migawkaBezpieczna();
@@ -68,13 +74,27 @@ export default async function StronaSpolki({
                 </span>
               )}
             </div>
-            <Link className="link" href="/screener">
-              ← Wróć do screenera
-            </Link>
+            <div className="spolka-akcje">
+              <Link className="btn-wykres-duzy" href={`?wykres=1`}>
+                Pokaż wykres
+              </Link>
+              <Link className="link" href="/screener">
+                ← Wróć do screenera
+              </Link>
+            </div>
           </div>
 
           <Profil spolka={spolka} wszystkie={instrumenty} newsy={newsy} />
         </>
+      )}
+
+      {spolka && pokazWykres && (
+        <WykresPelny
+          ticker={String(spolka.Ticker)}
+          nazwa={String(spolka.Nazwa ?? "")}
+          symbol={symbolTradingView(String(spolka.Ticker ?? ""))}
+          adresZamkniecia={`/spolka/${encodeURIComponent(String(spolka.Ticker))}`}
+        />
       )}
 
       <footer>

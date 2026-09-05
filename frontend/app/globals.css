@@ -547,3 +547,79 @@ footer {
   .uklad-z-panelem { grid-template-columns: 1fr; }
   .panel-spolki { position: static; max-height: none; }
 }
+
+/* =============================================================================
+   WYKRES NA PEŁNYM EKRANIE
+   W panelu bocznym wykres był nieczytelny — świece na 300 px przy trzech
+   wskaźnikach na wierzchu nie dawały się odczytać. Teraz otwiera się jako
+   nakładka na prawie cały ekran, a panel boczny został samymi danymi.
+   ========================================================================== */
+.naklada {
+  position: fixed; inset: 0; z-index: 50;
+  display: grid; place-items: center; padding: 16px;
+}
+/* Tło jest osobnym odnośnikiem POD oknem — kliknięcie obok zamyka wykres. */
+.naklada-tlo {
+  position: absolute; inset: 0; z-index: 0;
+  background: rgba(0, 0, 0, 0.62);
+}
+.naklada-okno {
+  position: relative; z-index: 1;
+  width: min(1600px, 96vw);
+  /* Stała wysokość, nie maksymalna: przy max-height okno kurczyło się do
+     zawartości, a wykres dostawał 150 px zamiast całego ekranu. */
+  height: 94vh;
+  display: flex; flex-direction: column;
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: 14px; overflow: hidden; box-shadow: var(--lift);
+}
+.naklada-pasek {
+  display: flex; align-items: center; gap: 10px;
+  padding: 11px 14px; border-bottom: 1px solid var(--line); flex: none;
+}
+.naklada-pasek strong { font-size: 1.05rem; font-weight: 800; letter-spacing: -0.015em; }
+.naklada-zamknij {
+  margin-left: auto; width: 32px; height: 32px; flex: none;
+  display: grid; place-items: center; border-radius: 8px;
+  border: 1px solid var(--line); color: var(--muted); font-size: 0.9rem;
+}
+.naklada-zamknij:hover { border-color: var(--down); color: var(--down); }
+
+.wykres-pelny { margin: 0; border: 0; border-radius: 0; flex: 1; display: flex; flex-direction: column; }
+.wykres-pelny .wykres-ramka { flex: 1; height: auto; min-height: 0; }
+/* TradingView wstawia WŁASNY kontener bez klasy, który nie dziedziczy
+   wysokości rodzica — iframe dostawał przez to 150 px niezależnie od tego,
+   ile miejsca mu daliśmy. Stąd wymuszenie na bezpośrednim dziecku. */
+.wykres-ramka > div { height: 100% !important; }
+.wykres-ramka iframe { height: 100% !important; width: 100% !important; }
+
+/* ---------- kolumna z wykresem w tabeli ---------- */
+th.kol-wykres, td.kol-wykres { width: 1%; white-space: nowrap; text-align: center; }
+.btn-wykres {
+  display: inline-grid; place-items: center; width: 30px; height: 30px;
+  border-radius: 8px; border: 1px solid var(--line);
+  background: var(--bg); color: var(--muted);
+}
+.btn-wykres:hover { border-color: var(--k1-fg); color: var(--k1-fg); }
+.btn-wykres svg {
+  width: 15px; height: 15px; fill: none; stroke: currentColor;
+  stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+}
+
+.spolka-akcje { margin-left: auto; display: flex; align-items: center; gap: 14px; }
+.btn-wykres-duzy {
+  padding: 8px 14px; border-radius: 10px; font-size: 0.85rem; font-weight: 600;
+  background: var(--k1-bg); color: var(--k1-fg); border: 1px solid transparent;
+}
+.btn-wykres-duzy:hover { border-color: var(--k1-fg); }
+
+@media (max-width: 720px) {
+  .naklada { padding: 8px; }
+  .naklada-okno { width: 100vw; max-height: 96vh; border-radius: 10px; }
+  .wykres-pelny .wykres-ramka { min-height: 66vh; }
+  /* Na telefonie tabela jest kartą, więc ikona wykresu wchodzi w wiersz
+     zamiast tworzyć osobną kolumnę. */
+  td.kol-wykres { grid-column: 2; grid-row: 4; text-align: right; }
+  td.kol-wykres::before { content: none; }
+  .spolka-akcje { margin-left: 0; }
+}
