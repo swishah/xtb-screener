@@ -1,0 +1,178 @@
+import Wskaznik from "./Wskaznik";
+import Wykres from "./Wykres";
+import { liczba, type Instrument } from "@/lib/filtry";
+import { statystykiSektora } from "@/lib/sektor";
+import { symbolTradingView } from "@/lib/tradingview";
+import type { News } from "@/lib/newsy";
+import {
+  GRUPY,
+  WSZYSTKIE_WSKAZNIKI,
+  formatuj,
+  ocen,
+  wartoscWskaznika,
+  zdanieOSektorze,
+} from "@/lib/wskazniki";
+
+/**
+ * Profil spółki — komponent SERWEROWY, używany w dwóch miejscach: na własnej
+ * stronie /spolka/[ticker] oraz w panelu bocznym Screenera. Dzięki temu obie
+ * ścieżki pokazują dokładnie to samo i nie rozjadą się przy kolejnych zmianach.
+ */
+
+function Rekomendacja({ spolka }: { spolka: Instrument }) {
+  const rek = String(spolka["Rekomendacja analityków"] ?? "BRAK");
+  const ilu = liczba(spolka["Liczba analityków"]);
+  const cel = liczba(spolka["Cena docelowa (analitycy)"]);
+  const cena = liczba(spolka["Cena"]);
+  const brakDanych = rek === "BRAK" || rek === "Brak" || !ilu;
+
+  if (brakDanych) {
+    return (
+      <p className="pusto">
+        Żaden analityk nie pokrywa tej spółki w danych Yahoo. To normalne przy
+        mniejszych spółkach spoza USA i nie mówi nic o jakości biznesu.
+      </p>
+    );
+  }
+
+  const potencjal =
+    cel !== null && cena !== null && cena > 0
+      ? ((cel - cena) / cena) * 100
+      : null;
+
+  return (
+    <div className="rek">
+      <div className="rek-poz">
+        <span className="rek-etykieta">Konsensus</span>
+        <strong>{rek}</strong>
+        <span className="brak">{ilu} analityków</span>
+      </div>
+      {cel !== null && (
+        <div className="rek-poz">
+          <span className="rek-etykieta">Cena docelowa</span>
+          <strong>
+            {cel.toLocaleString("pl-PL", { maximumFractionDigits: 2 })}{" "}
+            {String(spolka.Waluta ?? "")}
+          </strong>
+          {potencjal !== null && (
+            <span className={potencjal < 0 ? "down" : "up"}>
+              {potencjal > 0 ? "+" : ""}
+              {potencjal.toLocaleString("pl-PL", { maximumFractionDigits: 1 })}% do
+              kursu
+            </span>
+          )}
+        </div>
+      )}
+      <p className="pusto" style={{ marginTop: 6 }}>
+        Konsensus analityków bywa spóźniony i przesunięty w stronę rekomendacji
+        „kupuj” — traktuj jako jedną z przesłanek, nie rozstrzygnięcie.
+      </p>
+    </div>
+  );
+}
+
+export default function Profil({
+  spolka,
+  wszystkie,
+  newsy,
+  kompaktowy = false,
+}: {
+  spolka: Instrument;
+  wszystkie: Instrument[];
+  newsy: News[];
+  /** Wersja do panelu bocznego: węższa siatka, bez powtarzania nagłówka. */
+  kompaktowy?: boolean;
+}) {
+  const sektor = typeof spolka.Sektor === "string" ? spolka.Sektor : undefined;
+  const stat = statystykiSektora(
+    wszystkie,
+    sektor,
+    WSZYSTKIE_WSKAZNIKI.map((w) => w.klucz),
+  );
+
+  // Skan wpisuje tu "Brak" albo "BRAK", gdy nic nie znalazł — bez tego
+  // sprawdzenia sekcja pokazywała pozycję listy o treści „Brak”, co wygląda
+  // jak flaga, a znaczy jej brak.
+  const suroweFlagi = String(spolka["Czerwone flagi"] ?? "").trim();
+  const flagi = suroweFlagi.toLowerCase() === "brak" ? "" : suroweFlagi;
+  const symbol = symbolTradingView(String(spolka.Ticker ?? ""));
+
+  return (
+    <div className={kompaktowy ? "profil profil-kompakt" : "profil"}>
+      <Wykres symbol={symbol} />
+
+      {flagi && (
+        <section className="sekcja">
+          <h3>Czerwone flagi</h3>
+          <ul className="flagi-lista">
+            {flagi
+              .split(/[;|]\s*/)
+              .filter(Boolean)
+              .map((f, i) => (
+                <li key={i}>{f}</li>
+              ))}
+          </ul>
+        </section>
+      )}
+
+      <section className="sekcja">
+        <h3>Analitycy</h3>
+        <Rekomendacja spolka={spolka} />
+      </section>
+
+      {GRUPY.map((grupa) => (
+        <section key={grupa.nazwa} className="sekcja">
+          <h3>{grupa.nazwa}</h3>
+          <div className="wsk-siatka">
+            {grupa.wskazniki.map((def) => {
+              const wartosc = wartoscWskaznika(spolka, def.klucz);
+              const mediana = stat?.mediany[def.klucz] ?? null;
+              return (
+                <Wskaznik
+                  key={def.klucz}
+                  etykieta={def.etykieta}
+                  wartosc={formatuj(def, spolka[def.klucz])}
+                  ocena={ocen(def, wartosc, mediana)}
+                  opis={def.opis}
+                  porownanie={zdanieOSektorze(
+                    def,
+                    wartosc,
+                    mediana,
+                    stat?.sektor,
+                    stat?.liczbaSpolek ?? 0,
+                  )}
+                />
+              );
+            })}
+          </div>
+        </section>
+      ))}
+
+      <section className="sekcja">
+        <h3>Newsy z ostatniego miesiąca</h3>
+        {newsy.length > 0 ? (
+          <ul className="newsy">
+            {newsy.map((n) => (
+              <li key={n.link}>
+                <a href={n.link} target="_blank" rel="noopener noreferrer">
+                  {n.tytul}
+                </a>
+                <span className="brak">
+                  {n.wydawca} ·{" "}
+                  {new Date(n.czas * 1000).toLocaleDateString("pl-PL")}
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="pusto">
+            Brak newsów przypisanych do tego instrumentu. Yahoo ma pokrycie
+            praktycznie wyłącznie dla spółek amerykańskich — dla europejskich
+            zwraca artykuły o innych firmach o podobnej nazwie, więc świadomie
+            wolimy nie pokazać nic niż pokazać cudze.
+          </p>
+        )}
+      </section>
+    </div>
+  );
+}

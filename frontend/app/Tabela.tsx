@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { liczba, type Instrument } from "@/lib/filtry";
 
 /**
@@ -17,7 +18,20 @@ function fmt(wartosc: unknown, cyfry = 2, sufiks = ""): React.ReactNode {
   return `${tekst}${sufiks}`;
 }
 
-export default function Tabela({ wiersze }: { wiersze: Instrument[] }) {
+export default function Tabela({
+  wiersze,
+  link,
+  wybrany,
+}: {
+  wiersze: Instrument[];
+  /**
+   * Dokąd prowadzi kliknięcie w spółkę. Screener podaje adres otwierający
+   * panel boczny obok listy, pulpit — pełną stronę profilu. Bez tej funkcji
+   * tickery zostają zwykłym tekstem.
+   */
+  link?: (ticker: string) => string;
+  wybrany?: string;
+}) {
   if (wiersze.length === 0) {
     return (
       <p style={{ padding: "16px", color: "var(--muted)" }}>
@@ -43,17 +57,27 @@ export default function Tabela({ wiersze }: { wiersze: Instrument[] }) {
         </thead>
         <tbody>
           {wiersze.map((w) => {
+            const ticker = String(w.Ticker);
             const ath = liczba(w["pct_from_ath"]);
             const flagi = liczba(w["Liczba flag"]);
+            const nazwa = String(w.Nazwa ?? "");
             return (
-              <tr key={String(w.Ticker)}>
+              <tr key={ticker} className={ticker === wybrany ? "wiersz-wybrany" : undefined}>
                 <td className="t">
-                  {String(w.Ticker)}
-                  <small>{String(w.Nazwa ?? "")}</small>
+                  {link ? (
+                    <Link href={link(ticker)} className="ticker-link">
+                      {ticker}
+                      <small>{nazwa}</small>
+                    </Link>
+                  ) : (
+                    <>
+                      {ticker}
+                      <small>{nazwa}</small>
+                    </>
+                  )}
                 </td>
                 <td className="r n cena">
-                  {fmt(w.Cena)}{" "}
-                  <span className="brak">{String(w.Waluta ?? "")}</span>
+                  {fmt(w.Cena)} <span className="brak">{String(w.Waluta ?? "")}</span>
                 </td>
                 <td className="r n rsi" data-l="RSI">
                   {fmt(w.RSI, 1)}

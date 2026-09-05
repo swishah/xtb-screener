@@ -3,13 +3,10 @@ import { Suspense } from "react";
 import Pasek from "../Pasek";
 import Tabela from "../Tabela";
 import PanelFiltrow from "./Filtry";
+import Profil from "../spolka/Profil";
 import { migawkaBezpieczna } from "@/lib/dane";
-import {
-  FILTRY_DOMYSLNE,
-  filtruj,
-  wartosci,
-  type Filtry,
-} from "@/lib/filtry";
+import { newsySpolki } from "@/lib/newsy";
+import { liczba, FILTRY_DOMYSLNE, filtruj, wartosci, type Filtry } from "@/lib/filtry";
 
 export const dynamic = "force-dynamic";
 
@@ -49,15 +46,44 @@ export default async function Screener({
   // Listy wyboru budujemy z instrumentów danego TYPU, ale bez pozostałych
   // filtrów — inaczej wybranie sektora wycinałoby z listy rynki i nie dałoby
   // się już wrócić.
-  const wTypie = filtry.typ
-    ? instrumenty.filter((i) => i.Typ === filtry.typ)
-    : instrumenty;
+  const wTypie = filtry.typ ? instrumenty.filter((i) => i.Typ === filtry.typ) : instrumenty;
 
   const dopasowane = filtruj(instrumenty, filtry);
   const widoczne = dopasowane.slice(0, LIMIT);
 
+  // --- panel boczny -------------------------------------------------------
+  const wybranyTicker = (jeden("wybrana") ?? "").toUpperCase();
+  const wybrana = wybranyTicker
+    ? instrumenty.find((i) => String(i.Ticker ?? "").toUpperCase() === wybranyTicker)
+    : undefined;
+  const newsy = wybrana ? await newsySpolki(String(wybrana.Ticker)) : [];
+
+  /** Adres zachowujący filtry i podmieniający tylko wybraną spółkę. */
+  function adresZeSpolka(ticker: string): string {
+    const p = new URLSearchParams();
+    for (const [k, v] of Object.entries(q)) {
+      const w = Array.isArray(v) ? v[0] : v;
+      if (w && k !== "wybrana") p.set(k, w);
+    }
+    p.set("wybrana", ticker);
+    return `/screener?${p.toString()}`;
+  }
+
+  function adresBezSpolki(): string {
+    const p = new URLSearchParams();
+    for (const [k, v] of Object.entries(q)) {
+      const w = Array.isArray(v) ? v[0] : v;
+      if (w && k !== "wybrana") p.set(k, w);
+    }
+    const s = p.toString();
+    return s ? `/screener?${s}` : "/screener";
+  }
+
+  const cena = wybrana ? liczba(wybrana.Cena) : null;
+  const zmiana = wybrana ? liczba(wybrana["Zmiana ceny (1Y%)"]) : null;
+
   return (
-    <main className="wrap">
+    <main className="wrap wrap-szeroki">
       <Pasek dataMigawki={data} tryb={tryb} />
 
       {blad && (
@@ -85,8 +111,47 @@ export default async function Screener({
         />
       </Suspense>
 
-      <div className="card" style={{ marginTop: 12 }}>
-        <Tabela wiersze={widoczne} />
+      <div className={wybrana ? "uklad-z-panelem" : undefined}>
+        <div className="card" style={{ marginTop: 12 }}>
+          <Tabela wiersze={widoczne} link={adresZeSpolka} wybrany={wybranyTicker} />
+        </div>
+
+        {wybrana && (
+          <aside className="panel-spolki">
+            <div className="panel-spolki-naglowek">
+              <div>
+                <h2>{String(wybrana.Ticker)}</h2>
+                <p className="spolka-nazwa">
+                  {String(wybrana.Nazwa ?? "")}
+                  {wybrana.Sektor ? ` · ${String(wybrana.Sektor)}` : ""}
+                </p>
+              </div>
+              <div className="spolka-cena">
+                {cena !== null && (
+                  <strong>
+                    {cena.toLocaleString("pl-PL", { maximumFractionDigits: 2 })}{" "}
+                    <span className="brak">{String(wybrana.Waluta ?? "")}</span>
+                  </strong>
+                )}
+                {zmiana !== null && (
+                  <span className={zmiana < 0 ? "down" : "up"}>
+                    {zmiana > 0 ? "+" : ""}
+                    {zmiana.toLocaleString("pl-PL", { maximumFractionDigits: 1 })}% / rok
+                  </span>
+                )}
+              </div>
+              <Link className="panel-zamknij" href={adresBezSpolki()} aria-label="Zamknij panel">
+                ✕
+              </Link>
+            </div>
+
+            <Profil spolka={wybrana} wszystkie={instrumenty} newsy={newsy} kompaktowy />
+
+            <Link className="link" href={`/spolka/${encodeURIComponent(String(wybrana.Ticker))}`}>
+              Otwórz na pełnej stronie →
+            </Link>
+          </aside>
+        )}
       </div>
 
       <footer>
@@ -98,8 +163,9 @@ export default async function Screener({
         ) : (
           <>Wszystkie dopasowania mieszczą się na liście.</>
         )}{" "}
-        Wskaźniki liczone podczas codziennego skanu; „BRAK" znaczy, że Yahoo nie
-        podało danej wartości.
+        Kliknij spółkę, żeby zobaczyć wykres i pełne dane obok listy. Wskaźniki
+        liczone podczas codziennego skanu; „BRAK” znaczy, że Yahoo nie podało
+        danej wartości.
       </footer>
     </main>
   );

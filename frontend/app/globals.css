@@ -391,3 +391,159 @@ footer {
   .tab-strategia .miernik-tor { width: 90px; height: 9px; }
   .wybor-poz { flex: 1 1 100%; }
 }
+
+/* =============================================================================
+   PROFIL SPÓŁKI
+   ========================================================================== */
+.spolka-naglowek {
+  display: flex; align-items: flex-start; gap: 16px; flex-wrap: wrap;
+  padding: 18px 0 6px;
+}
+.spolka-naglowek h2 { margin: 0; font-size: 1.5rem; font-weight: 800; letter-spacing: -0.02em; }
+.spolka-nazwa { margin: 2px 0 0; font-size: 0.87rem; color: var(--muted); }
+.spolka-cena { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.spolka-cena strong { font-family: var(--mono); font-size: 1.3rem; font-weight: 600; }
+.spolka-cena span { font-size: 0.82rem; font-family: var(--mono); }
+.spolka-naglowek .link { margin-left: auto; align-self: center; font-size: 0.82rem; color: var(--accent); font-weight: 600; }
+.up { color: var(--good-fg); }
+
+.sekcja {
+  margin-top: 16px; background: var(--surface);
+  border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px 16px;
+}
+.sekcja h3 {
+  margin: 0 0 10px; font-size: 0.72rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.09em; color: var(--muted);
+}
+.pusto { margin: 0; font-size: 0.85rem; color: var(--muted); max-width: 70ch; }
+
+/* ---------- wskaźnik z oceną i pytajnikiem ---------- */
+.wsk-siatka {
+  display: grid; gap: 1px; background: var(--line);
+  border: 1px solid var(--line); border-radius: 10px; overflow: hidden;
+  grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+}
+.wsk { background: var(--surface); }
+.wsk-glowna { display: flex; align-items: center; gap: 10px; padding: 10px 13px; }
+.wsk-etykieta { font-size: 0.88rem; }
+.wsk-wartosc {
+  margin-left: auto; font-family: var(--mono); font-weight: 600;
+  font-size: 0.95rem; font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.wsk-ocena {
+  font-size: 0.7rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.05em; padding: 2px 7px; border-radius: 6px; white-space: nowrap;
+}
+.ocena-dobrze { background: var(--good-bg); color: var(--good-fg); }
+.ocena-przecietnie { background: var(--pill-bg); color: var(--pill-fg); }
+.ocena-slabo { background: rgba(192, 57, 46, 0.14); color: var(--down); }
+.wsk-pytajnik {
+  width: 22px; height: 22px; flex: none; cursor: pointer; border-radius: 50%;
+  border: 1px solid var(--line); background: var(--bg); color: var(--muted);
+  font: 700 0.75rem inherit; display: grid; place-items: center; padding: 0;
+}
+.wsk-pytajnik:hover { border-color: var(--accent); color: var(--accent); }
+.wsk-pytajnik:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.wsk-otwarty { background: var(--bg); }
+.wsk-opis { padding: 0 13px 12px; font-size: 0.83rem; color: var(--muted); }
+.wsk-opis p { margin: 0 0 6px; max-width: 62ch; }
+.wsk-porownanie { color: var(--fg); opacity: 0.85; }
+
+/* ---------- analitycy ---------- */
+.rek { display: flex; flex-wrap: wrap; gap: 10px 28px; }
+.rek-poz { display: flex; flex-direction: column; gap: 2px; }
+.rek-etykieta { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.rek-poz strong { font-size: 1.05rem; }
+.rek-poz span { font-size: 0.8rem; font-family: var(--mono); }
+
+/* ---------- flagi i newsy ---------- */
+.flagi-lista { margin: 0; padding-left: 18px; font-size: 0.88rem; }
+.flagi-lista li { margin-bottom: 4px; color: var(--down); }
+.newsy { list-style: none; margin: 0; padding: 0; }
+.newsy li {
+  padding: 9px 0; border-bottom: 1px solid var(--line);
+  display: flex; flex-direction: column; gap: 3px;
+}
+.newsy li:last-child { border-bottom: none; }
+.newsy a { font-size: 0.9rem; font-weight: 600; color: var(--accent); }
+.newsy a:hover { text-decoration: underline; }
+.newsy span { font-size: 0.76rem; }
+
+/* ---------- wykres ---------- */
+.wykres {
+  margin-top: 16px; background: var(--surface);
+  border: 1px solid var(--line); border-radius: 14px; overflow: hidden;
+}
+.wykres-pasek {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 14px; border-bottom: 1px solid var(--line);
+}
+.wykres-symbol { font-family: var(--mono); font-size: 0.82rem; color: var(--muted); }
+.wykres-interwaly { margin-left: auto; display: flex; gap: 4px; }
+.wykres-interwaly button {
+  font: 600 0.78rem inherit; font-family: var(--sans);
+  padding: 5px 11px; border-radius: 8px; cursor: pointer;
+  background: var(--bg); border: 1px solid var(--line); color: var(--muted);
+}
+.wykres-interwaly button:hover { color: var(--fg); }
+.wykres-interwaly button.aktywny {
+  background: var(--k1-bg); border-color: transparent; color: var(--k1-fg);
+}
+.wykres-ramka { height: 420px; }
+.wykres-stopka {
+  margin: 0; padding: 8px 14px 10px; font-size: 0.74rem; color: var(--muted);
+  border-top: 1px solid var(--line);
+}
+.wykres-brak { padding: 16px; font-size: 0.85rem; color: var(--muted); }
+
+@media (max-width: 720px) {
+  .wykres-ramka { height: 320px; }
+  .spolka-naglowek .link { margin-left: 0; }
+  .wsk-siatka { grid-template-columns: 1fr; }
+}
+
+/* =============================================================================
+   SCREENER Z PANELEM BOCZNYM
+   Lista po lewej, wybrana spółka po prawej — dzięki temu da się przelecieć
+   kandydatów bez gubienia filtrów. Panel jest zwykłym odnośnikiem w URL,
+   więc działa przycisk wstecz i da się wysłać komuś konkretny widok.
+   ========================================================================== */
+.wrap-szeroki { max-width: 1500px; }
+
+.uklad-z-panelem {
+  display: grid; gap: 14px; align-items: start;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 560px);
+}
+
+.panel-spolki {
+  position: sticky; top: 12px; margin-top: 12px;
+  max-height: calc(100vh - 24px); overflow-y: auto;
+  background: var(--bg); border: 1px solid var(--line);
+  border-radius: 14px; padding: 14px 16px 16px;
+}
+.panel-spolki-naglowek { display: flex; align-items: flex-start; gap: 12px; }
+.panel-spolki-naglowek h2 { margin: 0; font-size: 1.2rem; font-weight: 800; letter-spacing: -0.02em; }
+.panel-zamknij {
+  margin-left: auto; width: 30px; height: 30px; flex: none;
+  display: grid; place-items: center; border-radius: 8px;
+  border: 1px solid var(--line); color: var(--muted); font-size: 0.85rem;
+}
+.panel-zamknij:hover { border-color: var(--down); color: var(--down); }
+.panel-spolki .sekcja { border-radius: 12px; }
+.panel-spolki .link { display: inline-block; margin-top: 14px; font-size: 0.83rem; color: var(--accent); font-weight: 600; }
+
+/* W panelu jest ciasno, więc wskaźniki idą jedną kolumną. */
+.profil-kompakt .wsk-siatka { grid-template-columns: 1fr; }
+.profil-kompakt .wykres-ramka { height: 300px; }
+
+.ticker-link { display: block; color: inherit; }
+.ticker-link:hover { color: var(--accent); }
+.wiersz-wybrany { background: var(--k1-bg) !important; }
+.wiersz-wybrany .ticker-link { color: var(--k1-fg); }
+
+/* Przy otwartym panelu lista robi się wąska, więc chowamy kolumny wtórne
+   zamiast zmuszać do przewijania w bok. */
+@media (max-width: 1200px) {
+  .uklad-z-panelem { grid-template-columns: 1fr; }
+  .panel-spolki { position: static; max-height: none; }
+}
