@@ -19,7 +19,11 @@ STRATEGY_DESCRIPTIONS = {
     "Deep Value (spadki od ATH)": (
         "Premiuje duży dystans od ATH, ale tylko gdy fundamenty (ROE, marża "
         "operacyjna, wzrost EPS, zadłużenie) wciąż wyglądają zdrowo — ma to "
-        "odsiewać 'spadające noże' od realnych okazji."
+        "odsiewać 'spadające noże' od realnych okazji. UWAGA: to strategia "
+        "spółek PRZECENIONYCH, nie TANICH. Pomiar na migawce 2026-09-04: "
+        "mediana C/Z w czołówce 20,2 przy 21,6 w całym uniwersum (bez różnicy), "
+        "za to mediana spadku od szczytu -54,8% przy -19,7%. Jeśli szukasz "
+        "niskiej wyceny, użyj 'Wartość złożona'."
     ),
     "Momentum": (
         "Premiuje spółki w silnym, potwierdzonym trendzie wzrostowym: cena nad "
@@ -41,6 +45,33 @@ STRATEGY_DESCRIPTIONS = {
         "(bez porównań rok-do-roku z pełnych sprawozdań — to spowolniłoby skan "
         "~1300+ spółek). Sprawdza 8 sygnałów jakości: ROA, przepływy operacyjne, "
         "ROE, marża netto, wzrost EPS/przychodów, zadłużenie, marża brutto."
+    ),
+    "Blisko szczytu (52 tyg.)": (
+        "Wg George'a i Hwanga (Journal of Finance, 2004): bliskość rocznego "
+        "szczytu przewiduje przyszłe zwroty lepiej niż same przeszłe stopy "
+        "zwrotu. Liczy się jedna rzecz — jak blisko 52-tygodniowego maksimum "
+        "jest kurs — plus trzy zabezpieczenia (RSI, wzrost EPS, zadłużenie), "
+        "żeby odsiać jednorazowe wystrzały. To NIE to samo co Momentum, które "
+        "patrzy na średnie i MACD: w migawce 2026-09-04 czołówki obu miały "
+        "wspólnych 6 spółek na 30."
+    ),
+    "Formuła konserwatywna (lite)": (
+        "Wg Blitza i van Vlieta (2018): niska zmienność + oddawanie gotówki "
+        "akcjonariuszom + dodatnie momentum. W ich teście 15,1% rocznie w USA "
+        "od 1929, powtórzone w Europie, Japonii i na rynkach wschodzących. "
+        "'Lite' oznacza dwa uproszczenia: beta zamiast zmienności "
+        "36-miesięcznej i sama dywidenda zamiast net payout yield (bo historii "
+        "skupu akcji własnych nie mamy). Spółki oddające gotówkę głównie przez "
+        "buyback będą tu niedoszacowane."
+    ),
+    "Wartość złożona (C/Z + C/WK + C/CF)": (
+        "Trzy miary wyceny zamiast jednej, każda ważona tak samo. Powstała, bo "
+        "pomiar pokazał, że Deep Value selekcjonuje spółki przecenione, a nie "
+        "tanie — czynnik wartości był nieobsadzony. Literatura (Value Composite "
+        "O'Shaughnessy'ego) pokazuje, że mieszanka miar bije pojedynczy "
+        "wskaźnik, bo każda ma inną słabość. Oryginał używa sześciu miar; my "
+        "mamy trzy. Plus kontrola marży netto i ROE, żeby 'tanio' nie znaczyło "
+        "'zarabia coraz mniej'."
     ),
 }
 STRATEGY_COLUMNS = {
@@ -66,6 +97,19 @@ STRATEGY_COLUMNS = {
         "Ticker", "Nazwa", "Rynek", "Cena", "ROA (%)", "Przepływy operacyjne (mln)",
         "ROE (%)", "Marża netto (%)", "Wzrost EPS (%)", "Wzrost przychodów (%)",
         "Dług/Kapitał", "Marża brutto (%)", "Liczba flag",
+    ],
+    "Blisko szczytu (52 tyg.)": [
+        "Ticker", "Nazwa", "Rynek", "Sektor", "Cena", "52-tyg. maksimum",
+        "pct_from_ath", "RSI", "Wzrost EPS (%)", "Dług/Kapitał", "Liczba flag",
+    ],
+    "Formuła konserwatywna (lite)": [
+        "Ticker", "Nazwa", "Rynek", "Cena", "Beta", "Zmiana ceny (1Y%)",
+        "Stopa Dyw. (%)", "Payout ratio (%)", "Liczba flag",
+    ],
+    "Wartość złożona (C/Z + C/WK + C/CF)": [
+        "Ticker", "Nazwa", "Rynek", "Cena", "C/Z (P/E)", "C/WK (P/B)",
+        "Kapitalizacja (mld)", "Przepływy operacyjne (mln)", "Marża netto (%)",
+        "ROE (%)", "Liczba flag",
     ],
 }
 

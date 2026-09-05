@@ -81,7 +81,15 @@ export default async function Strategie({
             wynik {najlepszyWynik} / {strategia.maks}
           </em>
         </div>
-        <TabelaStrategii wiersze={czolo} strategia={strategia} />
+        {ranking.length > 0 ? (
+          <TabelaStrategii wiersze={czolo} strategia={strategia} />
+        ) : (
+          <p className="pusto" style={{ padding: "18px 0" }}>
+            Ta migawka powstała przed dodaniem tej strategii, więc nie ma jeszcze
+            policzonych wyników. Pojawią się po najbliższym codziennym skanie —
+            nic nie trzeba robić.
+          </p>
+        )}
       </div>
 
       <footer>

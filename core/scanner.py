@@ -336,12 +336,168 @@ def piotroski_lite_score(row: dict) -> int:
     return pts
 
 
+
+def near_high_score(row: dict) -> int:
+    """
+    Strategia "Blisko szczytu (52 tyg.)" — wg George & Hwang (Journal of
+    Finance, 2004). Ich ustalenie: bliskość rocznego szczytu przewiduje
+    przyszłe zwroty LEPIEJ niż same przeszłe stopy zwrotu, a efekt nie
+    odwraca się w długim terminie.
+
+    Czym się różni od Momentum: Momentum patrzy na średnie kroczące, MACD
+    i wolumen, czyli na potwierdzenie trendu. Tutaj liczy się jedna rzecz —
+    jak blisko rocznego maksimum jest kurs. W migawce z 2026-09-04 czołówki
+    obu strategii miały wspólnych tylko 6 spółek na 30.
+
+    Progi wzięte z rozkładu w naszym uniwersum, nie z sufitu: mediana
+    Cena/52-tyg. maksimum to 0,86, a 0,90 i 0,95 odcinają mniej więcej górne
+    20% i 12% spółek.
+    """
+    pts = 0
+    price = row.get("Cena")
+    high = row.get("52-tyg. maksimum")
+    if not (isinstance(price, (int, float)) and isinstance(high, (int, float))):
+        return 0
+    if high <= 0:
+        return 0
+
+    bliskosc = price / high
+    if bliskosc >= 0.90:
+        pts += 2
+    if bliskosc >= 0.95:
+        pts += 2
+    if bliskosc >= 0.98:
+        pts += 1
+
+    # Zabezpieczenia: sam szczyt to za mało, żeby odróżnić trwały trend od
+    # jednorazowego wystrzału na wykupionym rynku.
+    rsi = row.get("RSI")
+    if isinstance(rsi, (int, float)) and rsi < 75:
+        pts += 1
+    eps_growth = row.get("Wzrost EPS (%)")
+    if isinstance(eps_growth, (int, float)) and eps_growth > 0:
+        pts += 1
+    debt_eq = row.get("Dług/Kapitał")
+    if isinstance(debt_eq, (int, float)) and debt_eq < 150:
+        pts += 1
+    return pts
+
+
+def conservative_score(row: dict) -> int:
+    """
+    Strategia "Formuła konserwatywna (lite)" — wg Blitza i van Vlieta (2018):
+    niska zmienność, wysoki net payout yield, dodatnie momentum. W ich teście
+    15,1% rocznie w USA od 1929, powtórzone w Europie, Japonii i na rynkach
+    wschodzących.
+
+    DLACZEGO "LITE" — tak samo jak przy F-Score, nazwa mówi o dwóch
+    świadomych uproszczeniach:
+    1. Oryginał dzieli uniwersum po zmienności 36-miesięcznej; my mamy betę.
+       Beta mierzy wrażliwość na rynek, nie zmienność całkowitą, więc to
+       przybliżenie — dobre, ale nie to samo.
+    2. Oryginał używa net payout yield (dywidenda PLUS skup akcji własnych);
+       my mamy samą dywidendę, bo historii liczby akcji nie da się wiarygodnie
+       wyciągnąć z naszego źródła. Spółki oddające gotówkę głównie przez
+       buyback będą tu niedoszacowane.
+
+    Progi z rozkładu naszego uniwersum: mediana bety 0,84 (stąd 0,85 jako
+    granica "połowy o niższej zmienności"), pierwszy kwartyl 0,55; mediana
+    stopy dywidendy 2,18%, trzeci kwartyl 3,63%; mediana rocznej zmiany
+    ceny 12,3%.
+    """
+    pts = 0
+    beta = row.get("Beta")
+    if isinstance(beta, (int, float)):
+        if beta < 0.85:
+            pts += 2  # połowa uniwersum o niższej wrażliwości na rynek
+        if beta < 0.55:
+            pts += 1
+    chg = row.get("Zmiana ceny (1Y%)")
+    if isinstance(chg, (int, float)):
+        if chg > 0:
+            pts += 1
+        if chg > 12:
+            pts += 1
+    yld = row.get("Stopa Dyw. (%)")
+    if isinstance(yld, (int, float)):
+        if yld > 2:
+            pts += 1
+        if yld > 3.6:
+            pts += 1
+    # Dywidenda, która nie zjada spółki — namiastka kontroli jakości wypłaty.
+    payout = row.get("Payout ratio (%)")
+    if isinstance(payout, (int, float)) and 0 < payout < 100:
+        pts += 1
+    return pts
+
+
+def composite_value_score(row: dict) -> int:
+    """
+    Strategia "Wartość złożona" — trzy miary wyceny zamiast jednej.
+
+    DLACZEGO POWSTAŁA: pomiar na migawce z 2026-09-04 pokazał, że Deep Value
+    NIE jest strategią wartości. Jego top 30 miało medianę C/Z 20,2 przy 21,6
+    w całym uniwersum (czyli bez różnicy), za to medianę spadku od szczytu
+    -54,8% przy -19,7%. Deep Value wybiera spółki PRZECENIONE, nie TANIE —
+    czynnik wartości był u nas nieobsadzony.
+
+    Literatura (m.in. Value Composite O'Shaughnessy'ego) konsekwentnie
+    pokazuje, że mieszanka kilku miar wyceny bije pojedynczy wskaźnik: każda
+    miara ma inną słabość, a pomyłki nie kumulują się tak łatwo. Oryginał
+    używa sześciu miar; my mamy trzy — C/Z, C/WK i C/CF liczone
+    z kapitalizacji i przepływów operacyjnych. Brakuje C/P, EV/EBITDA
+    i shareholder yield.
+
+    Każda z trzech miar waży tyle samo (2 punkty za tanio, 1 za bardzo tanio),
+    żeby żadna nie zdominowała wyniku. Progi to pierwszy i dziesiąty decyl
+    naszego uniwersum: C/Z 15 i 10,5; C/WK 1,75 i 1,2; C/CF 8,5 i 5,2.
+    """
+    pts = 0
+    pe = row.get("C/Z (P/E)")
+    if isinstance(pe, (int, float)) and pe > 0:
+        if pe < 15:
+            pts += 2
+        if pe < 10.5:
+            pts += 1
+    pb = row.get("C/WK (P/B)")
+    if isinstance(pb, (int, float)) and pb > 0:
+        if pb < 1.75:
+            pts += 2
+        if pb < 1.2:
+            pts += 1
+
+    # C/CF liczymy tu, a nie w skanie — obie składowe są już w wierszu,
+    # więc nie potrzeba nowej kolumny ani zapytania do API.
+    mcap = row.get("Kapitalizacja (mld)")
+    cfo = row.get("Przepływy operacyjne (mln)")
+    if (isinstance(mcap, (int, float)) and isinstance(cfo, (int, float))
+            and mcap > 0 and cfo > 0):
+        p_cf = (mcap * 1000) / cfo
+        if p_cf < 8.5:
+            pts += 2
+        if p_cf < 5.2:
+            pts += 1
+
+    # Zabezpieczenie przed pułapką wartości: tanio ma znaczyć "przecenione",
+    # a nie "zarabia coraz mniej".
+    net_margin = row.get("Marża netto (%)")
+    if isinstance(net_margin, (int, float)) and net_margin > 0:
+        pts += 1
+    roe = row.get("ROE (%)")
+    if isinstance(roe, (int, float)) and roe > 0:
+        pts += 1
+    return pts
+
+
 STRATEGIES = {
     "Deep Value (spadki od ATH)": ("Score: Deep Value", deep_value_score),
     "Momentum": ("Score: Momentum", momentum_score),
     "Dywidendowa": ("Score: Dywidendowa", dividend_score),
     "Dywidenda-okazja (sezon dywidendowy)": ("Score: Dywidenda-Okazja", dividend_opportunity_score),
     "Jakość fundamentalna (F-Score uproszczony)": ("Score: F-Score Lite", piotroski_lite_score),
+    "Blisko szczytu (52 tyg.)": ("Score: Blisko Szczytu", near_high_score),
+    "Formuła konserwatywna (lite)": ("Score: Konserwatywna", conservative_score),
+    "Wartość złożona (C/Z + C/WK + C/CF)": ("Score: Wartość Złożona", composite_value_score),
 }
 
 # Maksymalne teoretyczne wartości każdego score'a — zweryfikowane empirycznie
@@ -354,6 +510,9 @@ STRATEGY_MAX_SCORES = {
     "Score: Dywidendowa": 7,
     "Score: Dywidenda-Okazja": 13,
     "Score: F-Score Lite": 8,
+    "Score: Blisko Szczytu": 8,
+    "Score: Konserwatywna": 8,
+    "Score: Wartość Złożona": 11,
 }
 
 
