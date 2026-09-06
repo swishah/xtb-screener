@@ -41,11 +41,13 @@ INDICATOR_GROUPS: dict[str, list[str]] = {
         "Beta", "52-tyg. maksimum", "52-tyg. minimum", "Cena docelowa (analitycy)",
         "Rekomendacja analityków", "Źródło rekomendacji",
         "Rekomendacja z dnia", "Liczba analityków", "% udziałów instytucji",
+        "Zmiana ceny docelowej (%)", "Zmiana rekomendacji", "Rewizja od dnia",
     ],
     "Scoring": [
         "Buy Score", "Score: Deep Value", "Score: Momentum",
         "Score: Dywidendowa", "Score: Dywidenda-Okazja", "Score: F-Score Lite",
         "Score: Blisko Szczytu", "Score: Konserwatywna", "Score: Wartość Złożona",
+        "Score: Rewizje",
     ],
 }
 
@@ -200,6 +202,25 @@ INDICATOR_HELP: dict[str, str] = {
         "payout. Uproszczona formuła konserwatywna Blitza i van Vlieta — beta "
         "zamiast zmienności 36-miesięcznej, sama dywidenda zamiast net payout yield."
     ),
+    "Zmiana ceny docelowej (%)": (
+        "O ile zmieniła się średnia cena docelowa analityków wobec migawki sprzed "
+        "około miesiąca. Dodatnia = analitycy podnieśli prognozę. Wzrost powyżej "
+        "3% to mniej więcej górne 10% rynku, powyżej 5% — górne 5%."
+    ),
+    "Zmiana rekomendacji": (
+        "Czy konsensus przesunął się w górę czy w dół wobec migawki sprzed około "
+        "miesiąca. Liczone TYLKO wtedy, gdy obie migawki mają rekomendację — "
+        "spółka, która wcześniej jej nie miała, nie jest 'podniesiona'."
+    ),
+    "Rewizja od dnia": (
+        "Data migawki, z którą porównujemy. Okno celuje w 30 dni, ale dopasowuje "
+        "się do tego, co jest w historii (od 12 do 75 dni)."
+    ),
+    "Score: Rewizje": (
+        "Zmiana ceny docelowej i rekomendacji wobec stanu sprzed miesiąca, plus "
+        "warunek, że cel wciąż jest powyżej kursu i że rekomendacji udziela co "
+        "najmniej trzech analityków. Jedyna strategia licząca się z historii."
+    ),
     "Score: Wartość Złożona": (
         "Trzy miary wyceny naraz (C/Z, C/WK, C/CF), każda ważona tak samo, plus "
         "kontrola marży netto i ROE. Mieszanka miar bije pojedynczy wskaźnik, bo "
@@ -213,6 +234,7 @@ TEXT_COLUMNS = {
     "Czerwone flagi", "Poprzednia dywidenda", "Przyszła dywidenda",
     "Dyw. w poprzednim roku", "Dyw. w tym roku",
     "smc", "Rekomendacja analityków", "Źródło rekomendacji", "Rekomendacja z dnia",
+    "Zmiana rekomendacji", "Rewizja od dnia",
 }
 
 DEFAULT_SCREENER_COLUMNS = [

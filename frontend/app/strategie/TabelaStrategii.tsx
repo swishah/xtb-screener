@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { liczba, type Instrument } from "@/lib/filtry";
 import { czyProcent, etykieta, type Strategia } from "@/lib/strategie";
 
@@ -7,6 +8,9 @@ import { czyProcent, etykieta, type Strategia } from "@/lib/strategie";
  * bo inaczej nie widać, dlaczego spółka dostała taki wynik.
  *
  * Komponent serwerowy: zero stanu, zero zdarzeń, zero JavaScriptu w przeglądarce.
+ * Sortowanie też — nagłówki są zwykłymi odnośnikami, a stan siedzi w adresie
+ * URL. Dzięki temu posortowany widok da się zapisać w zakładkach i wysłać,
+ * a strona nie potrzebuje ani bajta JavaScriptu po stronie przeglądarki.
  */
 
 function formatuj(wartosc: unknown, kolumna: string): React.ReactNode {
@@ -32,9 +36,14 @@ function formatuj(wartosc: unknown, kolumna: string): React.ReactNode {
 export default function TabelaStrategii({
   wiersze,
   strategia,
+  sortKolumna = null,
+  sortRosnaco = false,
 }: {
   wiersze: Instrument[];
   strategia: Strategia;
+  /** Kolumna, po której sortujemy; null = kolejność wg wyniku strategii. */
+  sortKolumna?: string | null;
+  sortRosnaco?: boolean;
 }) {
   if (wiersze.length === 0) {
     return (
@@ -44,16 +53,55 @@ export default function TabelaStrategii({
     );
   }
 
+  const bazowy = `/strategie?s=${strategia.klucz}`;
+
+  // Pierwsze kliknięcie sortuje malejąco (najwyższe wartości na górze — tego
+  // ludzie oczekują po kliknięciu w liczbową kolumnę), kolejne odwraca.
+  function adresSortowania(kolumna: string): string {
+    const odwroc = kolumna === sortKolumna && !sortRosnaco;
+    const kier = odwroc ? "&kier=asc" : "";
+    return `${bazowy}&sort=${encodeURIComponent(kolumna)}${kier}`;
+  }
+
+  function strzalka(kolumna: string): string {
+    if (kolumna !== sortKolumna) return "";
+    return sortRosnaco ? " ↑" : " ↓";
+  }
+
   return (
     <div className="scroll">
       <table className="tab-strategia">
         <thead>
           <tr>
             <th>Spółka</th>
-            <th className="r">Wynik</th>
+            <th
+              className="r"
+              aria-sort={sortKolumna === null ? "descending" : "none"}
+            >
+              {sortKolumna === null ? (
+                <>Wynik ↓</>
+              ) : (
+                <Link className="naglowek-sort" href={bazowy}>
+                  Wynik
+                </Link>
+              )}
+            </th>
             {strategia.kolumny.map((k) => (
-              <th key={k} className="r">
-                {etykieta(k)}
+              <th
+                key={k}
+                className="r"
+                aria-sort={
+                  k === sortKolumna
+                    ? sortRosnaco
+                      ? "ascending"
+                      : "descending"
+                    : "none"
+                }
+              >
+                <Link className="naglowek-sort" href={adresSortowania(k)}>
+                  {etykieta(k)}
+                  {strzalka(k)}
+                </Link>
               </th>
             ))}
           </tr>

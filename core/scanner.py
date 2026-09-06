@@ -518,6 +518,68 @@ def composite_value_score(row: dict) -> int:
     return pts
 
 
+
+def analyst_revision_score(row: dict) -> int:
+    """
+    Strategia "Rewizje analityków" — jedyna, która patrzy na HISTORIĘ.
+
+    W rankingu AAII, prowadzonym na żywo od 1998 roku, dwa najlepsze screeny
+    spośród kilkudziesięciu to właśnie rewizje prognoz: 21,9% i 21,2% rocznie
+    przy 8,9% dla S&P 500 Total Return. Mechanizm: rynek reaguje na zmianę
+    prognozy z opóźnieniem, więc kurs dryfuje w stronę, którą ta zmiana
+    wskazała.
+
+    Liczy się na kolumnach, które dokłada skan przez core/rewizje.py,
+    porównując dzisiejszą migawkę z tą sprzed około miesiąca. Progi z rozkładu
+    naszego uniwersum (porównanie 2026-08-10 z 2026-09-04, 1235 spółek):
+    trzeci kwartyl zmiany to +0,98%, dziewiąty decyl +3,00%, a +5% to mniej
+    więcej górne 5% rynku — czyli dokładnie próg, którego używa screen AAII.
+
+    Podwyżka rekomendacji waży 2 punkty, bo jest rzadka: w tym samym oknie
+    było ich 10 na 906 spółek z porównywalną rekomendacją. Rzadkie zdarzenie
+    niosące dużo informacji nie może ważyć tyle co drobna korekta ceny.
+    """
+    rewizja = 0
+    zmiana = row.get("Zmiana ceny docelowej (%)")
+    if isinstance(zmiana, (int, float)):
+        if zmiana > 0:
+            rewizja += 1
+        if zmiana >= 1:
+            rewizja += 1
+        if zmiana >= 3:
+            rewizja += 1
+        if zmiana >= 5:
+            rewizja += 1
+
+    if row.get("Zmiana rekomendacji") == "Podniesiona":
+        rewizja += 2
+
+    # BEZ REWIZJI NIE MA PUNKTÓW — nawet z potwierdzeń. Inaczej spółka, o której
+    # nic się nie zmieniło (albo o której nie mamy historii), dostawała 2 punkty
+    # za samo posiadanie ceny docelowej powyżej kursu. Sprawdzone na prawdziwej
+    # migawce: przy takim liczeniu 1051 spółek z 1281 miało dokładnie 2 punkty,
+    # więc o czołówce decydowały wyłącznie reguły remisu. To nie był ranking.
+    if rewizja == 0:
+        return 0
+
+    pts = rewizja
+
+    # Potwierdzenia — liczą się dopiero wtedy, gdy rewizja faktycznie zaszła.
+    # Rewizja w górę przy celu PONIŻEJ kursu znaczy tylko tyle, że analitycy
+    # gonią cenę. Punkt należy się, gdy jest jeszcze dokąd rosnąć.
+    cel = row.get("Cena docelowa (analitycy)")
+    cena = row.get("Cena")
+    if (isinstance(cel, (int, float)) and isinstance(cena, (int, float))
+            and cena > 0 and cel > cena):
+        pts += 1
+
+    # Rewizja jednego analityka to szum, nie sygnał.
+    ilu = row.get("Liczba analityków")
+    if isinstance(ilu, (int, float)) and ilu >= 3:
+        pts += 1
+    return pts
+
+
 STRATEGIES = {
     "Deep Value (spadki od ATH)": ("Score: Deep Value", deep_value_score),
     "Momentum": ("Score: Momentum", momentum_score),
@@ -527,6 +589,7 @@ STRATEGIES = {
     "Blisko szczytu (52 tyg.)": ("Score: Blisko Szczytu", near_high_score),
     "Formuła konserwatywna (lite)": ("Score: Konserwatywna", conservative_score),
     "Wartość złożona (5 miar wyceny)": ("Score: Wartość Złożona", composite_value_score),
+    "Rewizje analityków": ("Score: Rewizje", analyst_revision_score),
 }
 
 # Maksymalne teoretyczne wartości każdego score'a — zweryfikowane empirycznie
@@ -542,6 +605,7 @@ STRATEGY_MAX_SCORES = {
     "Score: Blisko Szczytu": 8,
     "Score: Konserwatywna": 8,
     "Score: Wartość Złożona": 17,
+    "Score: Rewizje": 8,
 }
 
 

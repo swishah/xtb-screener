@@ -649,3 +649,22 @@ th.kol-wykres, td.kol-wykres { width: 1%; white-space: nowrap; text-align: cente
   .tab-tanie td.sektor-kom { grid-column: 1 / -1; }
   .tab-tanie td.mocne-kom { grid-column: 1 / -1; max-width: none; }
 }
+
+/* Nagłówki sortujące w tabeli strategii. Wyglądają jak nagłówek, zachowują
+   się jak odnośnik — kolor dziedziczą po komórce, żeby nie krzyczały
+   niebieskim na tle reszty tabeli. */
+.naglowek-sort {
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.naglowek-sort:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.naglowek-sort:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 3px;
+}

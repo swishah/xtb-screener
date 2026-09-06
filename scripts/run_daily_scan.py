@@ -23,6 +23,8 @@ from core.db import (  # noqa: E402
 from core.alerts import check_top10_newcomers  # noqa: E402
 from core.rekomendacje import rekomendacje_gpw  # noqa: E402
 from core.rekomendacje_swiat import uzupelnij as rekomendacje_swiat  # noqa: E402
+from core.rewizje import uzupelnij as rewizje_uzupelnij  # noqa: E402
+from core.rewizje import kandydaci_odniesienia, ma_dane_odniesienia  # noqa: E402
 
 
 
@@ -146,6 +148,50 @@ def _ma_rekomendacje(r: dict) -> bool:
     return w not in ("", "brak", "nan", "none")
 
 
+
+def _uzupelnij_rewizje(rows: list[dict]) -> None:
+    """
+    Dokłada zmianę ceny docelowej i rekomendacji wobec migawki sprzed miesiąca.
+
+    Jako jedyna część skanu sięga do HISTORII, a nie do sieci. Gdy historii
+    jeszcze nie ma, kolumny dostają "BRAK" i strategia po prostu daje zero —
+    to normalny stan na starcie zbierania danych, nie błąd.
+    """
+    # Przechodzimy kandydatów od najbliższego celowi, aż trafimy na migawkę,
+    # która faktycznie ma ceny docelowe. Sama data nie wystarcza — kolumna
+    # pojawiła się dopiero 2026-08-10, więc starsze migawki są bezużyteczne
+    # mimo poprawnego wieku.
+    wybrana, poprzednie = None, None
+    for kandydat in kandydaci_odniesienia(list_dates()):
+        try:
+            wiersze = load_snapshot(kandydat).to_dict("records")
+        except Exception as e:  # noqa: BLE001
+            print(f"⚠️ Rewizje: nie udało się wczytać migawki {kandydat} "
+                  f"({type(e).__name__}) — próbuję starszą.")
+            continue
+        if not ma_dane_odniesienia(wiersze):
+            print(f"ℹ️ Rewizje: migawka {kandydat} nie ma cen docelowych "
+                  f"— próbuję inną.")
+            continue
+        wybrana = kandydat
+        poprzednie = {str(r["Ticker"]): r for r in wiersze}
+        break
+
+    if not wybrana:
+        rewizje_uzupelnij(rows, {}, "BRAK")
+        print("ℹ️ Rewizje analityków: brak użytecznej migawki odniesienia "
+              "— pomijam. To normalne na początku zbierania historii.")
+        return
+
+    data_odniesienia = wybrana
+    policzone = rewizje_uzupelnij(rows, poprzednie, data_odniesienia)
+    podniesione = sum(1 for r in rows if r.get("Zmiana rekomendacji") == "Podniesiona")
+    obnizone = sum(1 for r in rows if r.get("Zmiana rekomendacji") == "Obniżona")
+    print(f"📈 Rewizje analityków: policzono dla {policzone} spółek "
+          f"(odniesienie {data_odniesienia}); rekomendacje w górę {podniesione}, "
+          f"w dół {obnizone}.")
+
+
 def main() -> None:
     today = date.today().isoformat()
     all_rows: list[dict] = []
@@ -179,6 +225,16 @@ def main() -> None:
         all_rows.extend(analyze_group(wlasne_indeksy, kind="index", label="Indeksy"))
 
     _uzupelnij_rekomendacje(all_rows)
+    _uzupelnij_rewizje(all_rows)
+
+    # PRZELICZENIE WYNIKÓW STRATEGII — konieczne, nie kosmetyczne.
+    # scan_ticker liczy score'y w chwili budowania wiersza, czyli ZANIM
+    # dołożymy rekomendacje z zewnętrznych źródeł i rewizje. Strategia oparta
+    # na tych polach zobaczyłaby same pustki. Funkcje scoringowe są czyste
+    # i idempotentne, więc dla pozostałych strategii wynik jest identyczny.
+    for r in all_rows:
+        for _, (kolumna_score, funkcja_score) in STRATEGIES.items():
+            r[kolumna_score] = funkcja_score(r)
 
     # Migawka sprzed dzisiejszego zapisu — to jest nasze "wczoraj" do porównania.
     prior_dates = list_dates()

@@ -78,6 +78,17 @@ STRATEGY_DESCRIPTIONS = {
         "najwyżej 14 z 17 punktów. Tani bank wypadnie tu niżej niż równie tania "
         "spółka przemysłowa — porównuj je między sobą, nie z resztą rynku."
     ),
+    "Rewizje analityków": (
+        "JEDYNA strategia, która patrzy na historię: porównuje dzisiejszą cenę "
+        "docelową i rekomendację z tymi sprzed około miesiąca. W rankingu AAII, "
+        "prowadzonym na żywo od 1998 roku, dwa najlepsze screeny spośród "
+        "kilkudziesięciu to właśnie rewizje prognoz — 21,9% i 21,2% rocznie "
+        "przy 8,9% dla S&P 500 Total Return. Rynek reaguje na zmianę prognozy "
+        "z opóźnieniem, więc kurs dryfuje w stronę, którą ta zmiana wskazała. "
+        "Podwyżka rekomendacji waży najwięcej, bo jest rzadka. UWAGA: spółka, "
+        "która wcześniej nie miała rekomendacji, a teraz ma, NIE liczy się jako "
+        "rewizja — to tylko pojawienie się danych, nie zmiana zdania analityka."
+    ),
 }
 STRATEGY_COLUMNS = {
     "Deep Value (spadki od ATH)": [
@@ -116,6 +127,12 @@ STRATEGY_COLUMNS = {
         "Kapitalizacja (mld)", "Przepływy operacyjne (mln)", "Przychody (mln)",
         "Wartość przedsiębiorstwa (mld)", "EBITDA (mln)", "Marża netto (%)",
         "ROE (%)", "Liczba flag",
+    ],
+    "Rewizje analityków": [
+        "Ticker", "Nazwa", "Rynek", "Cena", "Zmiana ceny docelowej (%)",
+        "Zmiana rekomendacji", "Cena docelowa (analitycy)",
+        "Rekomendacja analityków", "Liczba analityków", "Rewizja od dnia",
+        "Liczba flag",
     ],
 }
 

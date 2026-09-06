@@ -160,6 +160,28 @@ export const STRATEGIE: Strategia[] = [
       "ROE (%)", "Liczba flag",
     ],
   },
+  {
+    klucz: "rewizje",
+    nazwa: "Rewizje analityków",
+    kolumnaScore: "Score: Rewizje",
+    maks: 8,
+    opis:
+      "JEDYNA strategia, która patrzy na historię: porównuje dzisiejszą cenę " +
+      "docelową i rekomendację z tymi sprzed około miesiąca. W rankingu AAII, " +
+      "prowadzonym na żywo od 1998 roku, dwa najlepsze screeny spośród " +
+      "kilkudziesięciu to właśnie rewizje prognoz — 21,9% i 21,2% rocznie przy " +
+      "8,9% dla S&P 500 Total Return. Rynek reaguje na zmianę prognozy " +
+      "z opóźnieniem, więc kurs dryfuje w stronę, którą ta zmiana wskazała. " +
+      "Spółka bez policzonej rewizji dostaje zero — samo posiadanie ceny " +
+      "docelowej powyżej kursu to nie jest sygnał. UWAGA: pojawienie się " +
+      "rekomendacji tam, gdzie jej wcześniej nie było, NIE liczy się jako " +
+      "podwyżka — to tylko uzupełnienie danych.",
+    kolumny: [
+      "Zmiana ceny docelowej (%)", "Zmiana rekomendacji",
+      "Cena docelowa (analitycy)", "Rekomendacja analityków",
+      "Liczba analityków", "Rewizja od dnia", "Liczba flag",
+    ],
+  },
 ];
 
 export function znajdzStrategie(klucz: string | undefined): Strategia {
@@ -182,6 +204,10 @@ const ETYKIETY: Record<string, string> = {
   "Kapitalizacja (mld)": "Kap. (mld)",
   "Przychody (mln)": "Przychody (mln)",
   "Wartość przedsiębiorstwa (mld)": "EV (mld)",
+  "Zmiana ceny docelowej (%)": "Zmiana celu",
+  "Cena docelowa (analitycy)": "Cena docelowa",
+  "Rekomendacja analityków": "Rekomendacja",
+  "Liczba analityków": "Analityków",
   "Zmiana ceny (1Y%)": "Zmiana 1R",
   "Dyw. w poprzednim roku": "Dyw. rok temu",
   "Dyw. w tym roku": "Dyw. w tym roku",
