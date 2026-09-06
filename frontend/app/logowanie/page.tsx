@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { zaloguj } from "./akcje";
 import { rejestracjaOtwarta } from "@/lib/konta";
+import { pocztaSkonfigurowana } from "@/lib/poczta";
 import { zalogowany } from "@/lib/sesja";
 
 export const dynamic = "force-dynamic";
@@ -68,8 +69,17 @@ export default async function Logowanie({
           <button type="submit">Zaloguj</button>
         </form>
 
+        {/* Odnośnik do resetu pokazujemy TYLKO wtedy, gdy poczta jest
+            skonfigurowana. Link prowadzący do formularza, który z założenia
+            nic nie wyśle, jest gorszy niż jego brak — użytkownik czekałby na
+            maila, którego nie ma. Bez SMTP hasło ustawia się skryptem
+            scripts/ustaw_haslo.py. */}
         <div className="pod-formularzem">
-          <Link href="/reset">Nie pamiętam hasła</Link>
+          {pocztaSkonfigurowana() ? (
+            <Link href="/reset">Nie pamiętam hasła</Link>
+          ) : (
+            <span />
+          )}
           {rejestracjaOtwarta() && <Link href="/rejestracja">Załóż konto</Link>}
         </div>
       </div>
