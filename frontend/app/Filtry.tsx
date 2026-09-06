@@ -12,6 +12,12 @@ import { SORTOWANIA, type Filtry } from "@/lib/filtry";
  * Samo filtrowanie robi serwer (patrz lib/dane.ts). Migawka waży ~1,9 MB, więc
  * przesyłanie jej do przeglądarki tylko po to, żeby filtrować na miejscu,
  * byłoby okrutne dla telefonu w zasięgu komórkowym.
+ *
+ * Używają go DWA moduły — Screener i Strategie — dlatego ścieżka jest
+ * parametrem, a nie wpisana na sztywno. W Strategiach chowamy pole „Sortuj wg":
+ * tam kolejność wyznacza wynik strategii, a przestawia się ją kliknięciem
+ * w nagłówek kolumny. Dwa konkurujące mechanizmy sortowania w jednym widoku
+ * tylko myliłyby.
  */
 export default function PanelFiltrow({
   wartosci,
@@ -19,12 +25,20 @@ export default function PanelFiltrow({
   sektory,
   liczbaWynikow,
   liczbaWszystkich,
+  sciezka = "/screener",
+  adresCzysty,
+  pokazSortowanie = true,
 }: {
   wartosci: Filtry;
   rynki: string[];
   sektory: string[];
   liczbaWynikow: number;
   liczbaWszystkich: number;
+  /** Dokąd wracamy po zmianie filtra. */
+  sciezka?: string;
+  /** Adres po wyczyszczeniu filtrów; domyślnie sama ścieżka. */
+  adresCzysty?: string;
+  pokazSortowanie?: boolean;
 }) {
   const router = useRouter();
   const params = useSearchParams();
@@ -39,7 +53,7 @@ export default function PanelFiltrow({
       else nowe.set(k, v);
     }
     startTransition(() => {
-      router.replace(`/screener?${nowe.toString()}`, { scroll: false });
+      router.replace(`${sciezka}?${nowe.toString()}`, { scroll: false });
     });
   }
 
@@ -153,16 +167,18 @@ export default function PanelFiltrow({
           </select>
         </label>
 
-        <label>
-          <span>Sortuj wg</span>
-          <select value={wartosci.sortuj} onChange={(e) => ustaw({ sortuj: e.target.value })}>
-            {SORTOWANIA.map((s) => (
-              <option key={s.klucz} value={s.klucz}>
-                {s.etykieta}
-              </option>
-            ))}
-          </select>
-        </label>
+        {pokazSortowanie && (
+          <label>
+            <span>Sortuj wg</span>
+            <select value={wartosci.sortuj} onChange={(e) => ustaw({ sortuj: e.target.value })}>
+              {SORTOWANIA.map((s) => (
+                <option key={s.klucz} value={s.klucz}>
+                  {s.etykieta}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
       </div>
 
       <div className="filtry-stopka">
@@ -172,7 +188,7 @@ export default function PanelFiltrow({
             : `${liczbaWynikow.toLocaleString("pl-PL")} z ${liczbaWszystkich.toLocaleString("pl-PL")}`}
         </span>
         {!czyste && (
-          <button onClick={() => router.replace("/screener", { scroll: false })}>
+          <button onClick={() => router.replace(adresCzysty ?? sciezka, { scroll: false })}>
             Wyczyść filtry
           </button>
         )}

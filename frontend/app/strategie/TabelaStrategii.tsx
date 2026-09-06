@@ -38,12 +38,20 @@ export default function TabelaStrategii({
   strategia,
   sortKolumna = null,
   sortRosnaco = false,
+  link,
+  linkWykres,
+  wybrany,
 }: {
   wiersze: Instrument[];
   strategia: Strategia;
   /** Kolumna, po której sortujemy; null = kolejność wg wyniku strategii. */
   sortKolumna?: string | null;
   sortRosnaco?: boolean;
+  /** Kliknięcie w nazwę spółki — otwiera profil w panelu obok listy. */
+  link?: (ticker: string) => string;
+  /** Osobna kolumna z ikoną — otwiera wykres na prawie całym ekranie. */
+  linkWykres?: (ticker: string) => string;
+  wybrany?: string;
 }) {
   if (wiersze.length === 0) {
     return (
@@ -74,6 +82,7 @@ export default function TabelaStrategii({
         <thead>
           <tr>
             <th>Spółka</th>
+            {linkWykres && <th className="kol-wykres">Wykres</th>}
             <th
               className="r"
               aria-sort={sortKolumna === null ? "descending" : "none"}
@@ -111,11 +120,40 @@ export default function TabelaStrategii({
             const score = liczba(w[strategia.kolumnaScore]) ?? 0;
             const udzial = Math.max(0, Math.min(1, score / strategia.maks));
             return (
-              <tr key={String(w.Ticker)}>
+              <tr
+                key={String(w.Ticker)}
+                className={
+                  String(w.Ticker) === wybrany ? "wiersz-wybrany" : undefined
+                }
+              >
                 <td className="t">
-                  {String(w.Ticker)}
-                  <small>{String(w.Nazwa ?? "")}</small>
+                  {link ? (
+                    <Link href={link(String(w.Ticker))} className="ticker-link">
+                      {String(w.Ticker)}
+                      <small>{String(w.Nazwa ?? "")}</small>
+                    </Link>
+                  ) : (
+                    <>
+                      {String(w.Ticker)}
+                      <small>{String(w.Nazwa ?? "")}</small>
+                    </>
+                  )}
                 </td>
+                {linkWykres && (
+                  <td className="kol-wykres">
+                    <Link
+                      href={linkWykres(String(w.Ticker))}
+                      className="btn-wykres"
+                      aria-label={`Wykres ${String(w.Ticker)}`}
+                      title="Pokaż wykres na pełnym ekranie"
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M3 3v18h18" />
+                        <path d="M7 14l4-5 3 3 5-7" />
+                      </svg>
+                    </Link>
+                  </td>
+                )}
                 <td className="r wynik" data-l="wynik">
                   <span className="miernik">
                     <span className="miernik-tor">

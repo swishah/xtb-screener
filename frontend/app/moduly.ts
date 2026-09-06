@@ -36,7 +36,7 @@ export const KATEGORIE: Kategoria[] = [
     etykieta: "Strategie",
     klasa: "k2",
     moduly: [
-      { nazwa: "Strategie", opis: "5 gotowych rankingów", sciezka: "/strategie" },
+      { nazwa: "Strategie", opis: "9 gotowych rankingów", sciezka: "/strategie" },
       { nazwa: "Własny scoring", opis: "Twoje wagi wskaźników", sciezka: null },
     ],
   },
@@ -60,6 +60,7 @@ export const KATEGORIE: Kategoria[] = [
     moduly: [
       { nazwa: "Watchlist", opis: "Obserwowane z notatkami", sciezka: null },
       { nazwa: "Analiza transakcji", opis: "Import z XTB", sciezka: null },
+      { nazwa: "Własne instrumenty", opis: "Ręcznie dodane tickery", sciezka: null },
     ],
   },
   {

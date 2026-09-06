@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import Pasek from "../Pasek";
 import Tabela from "../Tabela";
-import PanelFiltrow from "./Filtry";
+import PanelFiltrow from "../Filtry";
 import PanelSpolki from "../PanelSpolki";
 import WykresPelny from "../spolka/WykresPelny";
 import { migawkaBezpieczna } from "@/lib/dane";
