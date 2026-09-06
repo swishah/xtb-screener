@@ -124,6 +124,7 @@ function KrotkiePozycje({ spolka }: { spolka: Instrument }) {
   const NADZOR: Record<string, string> = {
     L: "rejestr brytyjskiego nadzoru (FCA)",
     WA: "rejestr Komisji Nadzoru Finansowego",
+    DE: "publikacje Bundesanzeigera",
   };
   const zrodloRynku = sufiks === "" ? "dane Yahoo dla USA" : NADZOR[sufiks];
   const sprawdzany = Boolean(zrodloRynku);
@@ -141,8 +142,8 @@ function KrotkiePozycje({ spolka }: { spolka: Instrument }) {
           <>
             <b>Tego rynku nie sprawdzamy.</b> Krótkie pozycje w Europie
             publikują krajowe nadzory, każdy w innym formacie; na razie
-            zaczytujemy rejestr brytyjski (FCA) i polski (KNF), a dla USA dane
-            z Yahoo. Puste miejsce NIE znaczy, że nikt nie gra na spadek tej
+            zaczytujemy rejestr brytyjski (FCA), polski (KNF) i niemiecki
+            (Bundesanzeiger), a dla USA dane z Yahoo. Puste miejsce NIE znaczy, że nikt nie gra na spadek tej
             spółki — znaczy, że nie mamy tu źródła.
           </>
         )}
@@ -151,8 +152,15 @@ function KrotkiePozycje({ spolka }: { spolka: Instrument }) {
   }
 
   // FCA i KNF podają procent wyemitowanego kapitału; Yahoo — wolnego obrotu.
-  const zRejestru = zrodlo.startsWith("FCA") || zrodlo.startsWith("KNF");
-  const nazwaRejestru = zrodlo.startsWith("KNF") ? "rejestr KNF" : "rejestr FCA";
+  const REJESTRY: Record<string, string> = {
+    FCA: "rejestr FCA",
+    KNF: "rejestr KNF",
+    Bundesanzeiger: "Bundesanzeiger",
+  };
+  const nazwaRejestru = Object.entries(REJESTRY).find(([k]) =>
+    zrodlo.startsWith(k),
+  )?.[1];
+  const zRejestru = Boolean(nazwaRejestru);
   const dni = liczba(spolka["Short: dni do pokrycia"]);
   const ile = liczba(spolka["Short: liczba pozycji"]);
   const najwiekszy = String(spolka["Short: największy gracz"] ?? "");

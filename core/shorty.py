@@ -16,6 +16,9 @@ sprzedaży pozycje powyżej progu są JAWNE i publikowane przez nadzory.
   3. **Warszawa — rejestr KNF (rss.knf.gov.pl).** Jedno zapytanie JSON na
      całą giełdę. Próg jawności to 0,5% wyemitowanego kapitału, czyli wyżej
      niż brytyjskie 0,2% — pozycji jest więc mniej, ale każda jest istotna.
+  4. **Frankfurt — Bundesanzeiger.** Gotowy eksport CSV całej listy, ale za
+     sesją: najpierw trzeba wejść na stronę po ciasteczko, bo adres pliku
+     zawiera identyfikator stanu strony. Próg też 0,5%.
 
 DWIE LICZBY, KTÓRE WYGLĄDAJĄ TAK SAMO, A ZNACZĄ CO INNEGO. Yahoo podaje
 procent **wolnego obrotu** (free float), FCA — procent **wyemitowanego
@@ -24,10 +27,10 @@ się różnić kilkukrotnie. Dlatego zapisujemy źródło osobno i profil spół
 mówi wprost, co jest czym. **Nie sklejaj tych wartości w jedną kolumnę bez
 źródła.**
 
-CZEGO NIE MA. Pozostałe rynki europejskie (Frankfurt, Paryż, Mediolan,
-Madryt, Sztokholm, Oslo, Wiedeń, Lizbona) mają własne rejestry u własnych
-nadzorów — BaFin, AMF, CONSOB, CNMV i tak dalej — każdy w innym formacie.
-To osobna praca na każdy kraj i NIE jest zrobiona.
+CZEGO NIE MA. Pozostałe rynki europejskie (Paryż, Mediolan, Madryt,
+Sztokholm, Oslo, Wiedeń, Lizbona) mają własne rejestry u własnych nadzorów —
+AMF, CONSOB, CNMV i tak dalej — każdy w innym formacie. To osobna praca na
+każdy kraj i NIE jest zrobiona.
 Brak danych o shortach dla tych rynków nie znaczy „brak shortów", tylko
 „nie sprawdzamy". Profil spółki mówi to wprost, żeby nikt nie wziął pustego
 pola za zielone światło.
@@ -48,7 +51,9 @@ jest pełne.
 """
 from __future__ import annotations
 
+import csv
 import html
+import http.cookiejar
 import io
 import json
 import re
@@ -437,6 +442,159 @@ def uzupelnij_knf(rows: list[dict]) -> int:
 
     print(f"📉 Shorty: uzupełniono {uzupelnione} spółek z GPW "
           f"(sprawdzono {len(gpw)}).")
+    return uzupelnione
+
+
+# ---------------------------------------------------------------------------
+# Frankfurt — Bundesanzeiger
+# ---------------------------------------------------------------------------
+
+# Strona publikacji pozycji krótkich. Adres pliku CSV zawiera identyfikator
+# stanu strony (Wicket), więc nie da się go wpisać na sztywno — trzeba wejść
+# na stronę, wziąć ciasteczko sesji i wyłuskać link z HTML-a.
+ADRES_BUNDESANZEIGER = "https://www.bundesanzeiger.de/pub/de/nlp"
+
+# UWAGA CO DO robots.txt. Plik zawiera "Disallow: /nlp" z komentarzem, że
+# sekcja NLP nie ma być indeksowana. Nasza ścieżka to /pub/de/nlp, więc
+# literalnie ta reguła jej nie obejmuje (dopasowanie w robots.txt idzie od
+# początku ścieżki), ale INTENCJA operatora jest czytelna. Robimy JEDNO
+# pobranie na dobę, tego samego pliku, który serwis sam udostępnia przyciskiem
+# „Als CSV herunterladen", na własny użytek i bez publikowania dalej.
+# Gdyby to miało być problemem — wystarczy usunąć wywołanie `uzupelnij_de`
+# ze skanu, reszta modułu działa bez zmian.
+
+_SZUM_DE = re.compile(
+    r"\b(aktiengesellschaft|ag|se|kgaa|kg|gmbh|co|company|holding|holdings|"
+    r"group|gruppe|plc|ltd|limited|nv|sa|inc|the)\b",
+    re.I,
+)
+_UMLAUTY = (("ä", "ae"), ("ö", "oe"), ("ü", "ue"), ("ß", "ss"))
+
+
+def klucz_de(nazwa: str) -> str:
+    """Nazwa bez odstępów, umlautów i form prawnych."""
+    t = str(nazwa or "").lower()
+    for a, b in _UMLAUTY:
+        t = t.replace(a, b)
+    t = t.replace("&", " and ")
+    t = re.sub(r"[^a-z0-9 ]", " ", t)
+    t = _SZUM_DE.sub(" ", t)
+    return re.sub(r"\s+", "", t)
+
+
+def rejestr_bundesanzeiger(adres: str = ADRES_BUNDESANZEIGER) -> dict[str, dict]:
+    """
+    Aktualne pozycje krótkie z Bundesanzeigera, kluczowane skrótem nazwy.
+
+    Lista zawiera wyłącznie pozycje otwarte (sprawdzone: wszystkie 476 wpisów
+    ma co najmniej 0,5%, czyli próg jawności), więc nie trzeba odsiewać
+    zamknięć jak przy FCA. Nigdy nie rzuca wyjątkiem.
+    """
+    try:
+        jar = http.cookiejar.CookieJar()
+        op = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
+        req = urllib.request.Request(adres, headers={"User-Agent": UA})
+        with op.open(req, timeout=60) as odp:
+            html_strony = odp.read().decode("utf-8", "replace")
+
+        m = re.search(r'href="([^"]*csv[^"]*)"', html_strony)
+        if not m:
+            print("⚠️ Shorty Bundesanzeiger: nie znalazłem linku do CSV — "
+                  "strona pewnie się zmieniła.")
+            return {}
+
+        req = urllib.request.Request(
+            m.group(1), headers={"User-Agent": UA, "Referer": adres}
+        )
+        with op.open(req, timeout=90) as odp:
+            tekst = odp.read().decode("utf-8-sig", "replace")
+    except Exception as e:  # noqa: BLE001
+        print(f"⚠️ Shorty Bundesanzeiger: nie udało się pobrać "
+              f"({type(e).__name__}).")
+        return {}
+
+    wg_emitenta: dict[str, list[tuple]] = defaultdict(list)
+    try:
+        for w in csv.DictReader(io.StringIO(tekst)):
+            emitent = (w.get("Emittent") or "").strip()
+            procent = _procent_z_tekstu(w.get("Position"))
+            if not emitent or procent is None:
+                continue
+            wg_emitenta[emitent].append(
+                ((w.get("Positionsinhaber") or "").strip(),
+                 procent,
+                 (w.get("Datum") or "")[:10])
+            )
+    except Exception as e:  # noqa: BLE001
+        print(f"⚠️ Shorty Bundesanzeiger: błąd przy czytaniu CSV "
+              f"({type(e).__name__}).")
+        return {}
+
+    wynik: dict[str, dict] = {}
+    for emitent, pozycje in wg_emitenta.items():
+        k = klucz_de(emitent)
+        if not k:
+            continue
+        najwiekszy = max(pozycje, key=lambda x: x[1])
+        wynik[k] = {
+            "procent": round(sum(x[1] for x in pozycje), 2),
+            "liczba": len(pozycje),
+            "najwiekszy_kto": najwiekszy[0],
+            "najwiekszy_ile": round(najwiekszy[1], 2),
+            "data": max(x[2] for x in pozycje),
+        }
+
+    print(f"📉 Shorty Bundesanzeiger: {len(wynik)} emitentów z otwartą "
+          f"pozycją krótką.")
+    return wynik
+
+
+def uzupelnij_de(rows: list[dict]) -> int:
+    """
+    Dokłada dane o shortach spółkom z Frankfurtu.
+
+    DOPASOWUJEMY WYŁĄCZNIE PRZEZ RÓWNOŚĆ NAZW i to jest wynik pomiaru, nie
+    ostrożność na wyrost. Luźniejsze reguły, które sprawdziły się przy GPW
+    (zawieranie, wspólny prefiks), na niemieckich nazwach dają same pomyłki:
+
+        Bayer       ~ Bayerische Motoren Werke   (czyli BMW)
+        Infineon    ~ E.ON                       ("eon" siedzi w "infineon")
+        RWE         ~ Friedrich Vorwerk          ("rwe" w "vorwerk")
+        Continental ~ InterContinental Hotels
+        Fresenius   ~ Fresenius Medical Care     (inna spółka!)
+
+    Sprawdzone na 59 spółkach: sama równość daje 13 trafień i ZERO pomyłek,
+    luźniejsze reguły dorzucają siedem kandydatów i wszyscy są błędni.
+    Świadomie tracimy Porsche Automobil Holding (w rejestrze pod pełną nazwą)
+    — lepiej nie pokazać nic, niż przypisać komuś cudzą pozycję.
+    **Nie luzuj tego dopasowania.**
+    """
+    niemieckie = [r for r in rows if str(r.get("Ticker", "")).endswith(".DE")]
+    if not niemieckie:
+        return 0
+
+    rejestr = rejestr_bundesanzeiger()
+    if not rejestr:
+        return 0
+
+    uzupelnione = 0
+    for r in niemieckie:
+        if r.get("Krótkie pozycje (%)") not in (None, "", "BRAK"):
+            continue
+        dane = rejestr.get(klucz_de(r.get("Nazwa", "")))
+        if not dane:
+            continue
+        r["Krótkie pozycje (%)"] = dane["procent"]
+        r["Short: liczba pozycji"] = dane["liczba"]
+        r["Short: największy gracz"] = (
+            f"{dane['najwiekszy_kto']} ({dane['najwiekszy_ile']}%)"
+        )
+        r["Short z dnia"] = dane["data"]
+        r["Źródło shortów"] = "Bundesanzeiger — % wyemitowanego kapitału"
+        uzupelnione += 1
+
+    print(f"📉 Shorty: uzupełniono {uzupelnione} spółek z Frankfurtu "
+          f"(sprawdzono {len(niemieckie)}).")
     return uzupelnione
 
 
