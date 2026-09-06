@@ -21,7 +21,12 @@ sprzedaży pozycje powyżej progu są JAWNE i publikowane przez nadzory.
      zawiera identyfikator stanu strony. Próg też 0,5%.
   5. **Madryt — CNMV.** Osobny arkusz z pozycjami otwartymi, ale plik jest
      w STARYM formacie XLS (OLE2) — stąd jedyna w projekcie zależność `xlrd`.
-  6. **Paryż — AMF przez data.gouv.fr.** Najczystsze źródło w zestawie:
+  6. **Sztokholm — Finansinspektionen.** Jedyny rejestr bez pliku: dane są
+     wprost w tabeli HTML strony. Zbiorcza tabela daje sumę na emitenta,
+     a szczegóły (kto i ile) siedzą na podstronach — dociągamy je WYŁĄCZNIE
+     dla spółek, które faktycznie dopasowaliśmy, więc kilkanaście zapytań,
+     nie trzysta.
+  7. **Paryż — AMF przez data.gouv.fr.** Najczystsze źródło w zestawie:
      oficjalne otwarte dane na Licencji Otwartej 2.0, aktualizowane codziennie,
      wprost przeznaczone do przetwarzania automatycznego. Żadnych wątpliwości
      co do dozwolonego użycia.
@@ -33,9 +38,8 @@ się różnić kilkukrotnie. Dlatego zapisujemy źródło osobno i profil spół
 mówi wprost, co jest czym. **Nie sklejaj tych wartości w jedną kolumnę bez
 źródła.**
 
-CZEGO NIE MA. Sztokholm, Oslo, Wiedeń i Lizbona mają własne rejestry
-u własnych nadzorów, każdy w innym formacie — osobna praca na każdy kraj,
-NIE zrobiona. **Mediolan jest zablokowany świadomie:** CONSOB odsiewa
+CZEGO NIE MA. Oslo, Wiedeń i Lizbona mają własne rejestry u własnych
+nadzorów, każdy w innym formacie — osobna praca na każdy kraj, NIE zrobiona. **Mediolan jest zablokowany świadomie:** CONSOB odsiewa
 klienty niebędące przeglądarką stroną CAPTCHA (Radware), a obchodzenia
 zabezpieczeń przed botami nie robimy. Ich plik jest zresztą wzorowy —
 gdyby CONSOB udostępnił dostęp programistyczny (adres kontaktowy:
@@ -66,6 +70,7 @@ import http.cookiejar
 import io
 import json
 import re
+import time
 import urllib.parse
 import urllib.request
 from collections import defaultdict
@@ -891,6 +896,178 @@ def uzupelnij_es(rows: list[dict]) -> int:
     print(f"📉 Shorty: uzupełniono {ile} spółek z Madrytu "
           f"(sprawdzono {len(hiszpanskie)}).")
     return ile
+
+
+# ---------------------------------------------------------------------------
+# Sztokholm — Finansinspektionen
+# ---------------------------------------------------------------------------
+
+ADRES_FI = "https://www.fi.se/en/our-registers/net-short-positions/"
+ADRES_FI_EMITENT = ADRES_FI + "emittent?id={lei}"
+
+# Ile podstron emitentów wolno dociągnąć w jednym skanie. Zapora na wypadek,
+# gdyby uniwersum urosło — sam rejestr ma ponad 300 pozycji.
+LIMIT_FI_SZCZEGOLOW = 40
+
+# Szwedzkie i nordyckie formy prawne. Osobno od wspólnej listy, bo dotyczą
+# tylko tego rynku i nie ma powodu ruszać pozostałych.
+_FORMY_SE = re.compile(r"\b(ab|publ|aktiebolaget|aktiebolag|asa|oyj|abp)\b", re.I)
+
+# Klasa akcji na końcu NASZEJ nazwy („Atlas Copco B"). Rejestr podaje
+# emitenta, nie serię, więc obie klasy mają tę samą pozycję krótką — i tak
+# ma być, bo short dotyczy kapitału spółki, nie konkretnej serii.
+_KLASA_AKCJI = re.compile(r"\s+[abc]$", re.I)
+
+
+def slowa_se(nazwa: str) -> str:
+    """Normalizacja dla rynku szwedzkiego: klasa akcji i formy prawne precz."""
+    t = _KLASA_AKCJI.sub("", str(nazwa or "").strip())
+    return slowa(_FORMY_SE.sub(" ", t))
+
+
+def _komorki(wiersz_html: str) -> list[str]:
+    return [
+        html.unescape(re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", c))).strip()
+        for c in re.findall(r"<t[dh][^>]*>(.*?)</t[dh]>", wiersz_html, re.S)
+    ]
+
+
+def rejestr_fi(adres: str = ADRES_FI) -> dict[str, dict]:
+    """
+    Sumy pozycji krótkich na emitenta, prosto z tabeli na stronie FI.
+
+    Jedyny rejestr, który nie udostępnia pliku — dane są w HTML-u. Zbiorcza
+    tabela ma nazwę emitenta, kod LEI, datę i sumę procentową; szczegóły
+    dociąga osobno `_szczegoly_fi()`.
+    """
+    try:
+        req = urllib.request.Request(adres, headers={"User-Agent": UA})
+        with urllib.request.urlopen(req, timeout=60) as odp:
+            strona = odp.read().decode("utf-8", "replace")
+        tabela = re.search(r"<table[^>]*>(.*?)</table>", strona, re.S)
+        if not tabela:
+            print("⚠️ Shorty FI: nie znalazłem tabeli — strona się zmieniła.")
+            return {}
+    except Exception as e:  # noqa: BLE001
+        print(f"⚠️ Shorty FI: nie udało się pobrać rejestru ({type(e).__name__}).")
+        return {}
+
+    wynik: dict[str, dict] = {}
+    for wiersz in re.findall(r"<tr[^>]*>(.*?)</tr>", tabela.group(1), re.S):
+        kom = _komorki(wiersz)
+        if len(kom) < 4:
+            continue
+        procent = _procent_z_tekstu(kom[3])
+        if procent is None or not kom[0]:
+            continue
+        k = slowa_se(kom[0])
+        if not k:
+            continue
+        wynik[k] = {
+            "procent": round(procent, 2),
+            "liczba": None,          # uzupełni `_szczegoly_fi`, jeśli się uda
+            "najwiekszy_kto": "",
+            "najwiekszy_ile": None,
+            "data": kom[2][:10],
+            "lei": kom[1],
+        }
+
+    print(f"📉 Shorty FI: {len(wynik)} emitentów z otwartą pozycją krótką.")
+    return wynik
+
+
+def _szczegoly_fi(lei: str) -> tuple[int, str, float] | None:
+    """Liczba zgłoszeń i największy gracz dla jednego emitenta. None przy błędzie."""
+    if not lei:
+        return None
+    try:
+        req = urllib.request.Request(
+            ADRES_FI_EMITENT.format(lei=urllib.parse.quote(lei)),
+            headers={"User-Agent": UA},
+        )
+        with urllib.request.urlopen(req, timeout=45) as odp:
+            strona = odp.read().decode("utf-8", "replace")
+    except Exception:  # noqa: BLE001
+        return None
+
+    pozycje: list[tuple[str, float]] = []
+    for tabela in re.findall(r"<table[^>]*>(.*?)</table>", strona, re.S):
+        if "Position holder" not in tabela:
+            continue
+        for wiersz in re.findall(r"<tr[^>]*>(.*?)</tr>", tabela, re.S):
+            kom = _komorki(wiersz)
+            if len(kom) < 3:
+                continue
+            procent = _procent_z_tekstu(kom[2])
+            if procent is None or not kom[0]:
+                continue
+            pozycje.append((kom[0], procent))
+    if not pozycje:
+        return None
+    najwiekszy = max(pozycje, key=lambda x: x[1])
+    return len(pozycje), najwiekszy[0], round(najwiekszy[1], 2)
+
+
+def uzupelnij_se(rows: list[dict]) -> int:
+    """
+    Dokłada dane o shortach spółkom ze Sztokholmu.
+
+    Dopasowanie idzie przez `slowa_se`, czyli tę samą regułę równości co
+    wszędzie, tylko z nordyckimi formami prawnymi i obciętą klasą akcji.
+    Dwie serie tej samej spółki (Atlas Copco A i B) dostają tę samą wartość
+    i to jest poprawne — pozycja krótka dotyczy kapitału emitenta.
+
+    CZĘŚĆ SPÓŁEK NIE MA SZCZEGÓŁÓW i to też nie jest błąd. Suma na stronie
+    zbiorczej obejmuje również pozycje PONIŻEJ progu publikacji pojedynczych
+    zgłoszeń, więc spółka może mieć realne 0,3% łącznie, a podstrona
+    emitenta pozostaje pusta, bo żaden fundusz nie przekroczył progu.
+    Zmierzone: 13 z 20 emitentów ma rozpisane pozycje, a te bez nich to
+    właśnie największe spółki z najniższymi sumami (ABB 0,11%, Sandvik
+    0,29%, AstraZeneca 0,30%). Wtedy pokazujemy samą sumę i datę.
+    """
+    szwedzkie = [r for r in rows if str(r.get("Ticker", "")).endswith(".ST")]
+    if not szwedzkie:
+        return 0
+
+    rejestr = rejestr_fi()
+    if not rejestr:
+        return 0
+
+    # Najpierw dopasowanie — dopiero potem dociągamy szczegóły, i tylko dla
+    # trafionych. Odwrotna kolejność znaczyłaby 300 zapytań zamiast kilkunastu.
+    pary: dict[str, str] = {}
+    for r in szwedzkie:
+        if r.get("Krótkie pozycje (%)") not in (None, "", "BRAK"):
+            continue
+        k = slowa_se(r.get("Nazwa", ""))
+        if k and k in rejestr:
+            pary[str(r["Ticker"])] = k
+
+    szczegoly: dict[str, tuple] = {}
+    for k in list(dict.fromkeys(pary.values()))[:LIMIT_FI_SZCZEGOLOW]:
+        dane = _szczegoly_fi(rejestr[k].get("lei", ""))
+        if dane:
+            szczegoly[k] = dane
+        time.sleep(0.3)
+
+    uzupelnione = 0
+    for r in szwedzkie:
+        k = pary.get(str(r["Ticker"]))
+        if not k:
+            continue
+        dane = rejestr[k]
+        r["Krótkie pozycje (%)"] = dane["procent"]
+        r["Short z dnia"] = dane["data"]
+        r["Źródło shortów"] = "FI — % wyemitowanego kapitału"
+        if k in szczegoly:
+            liczba, kto, ile = szczegoly[k]
+            r["Short: liczba pozycji"] = liczba
+            r["Short: największy gracz"] = f"{kto} ({ile}%)"
+        uzupelnione += 1
+
+    print(f"📉 Shorty: uzupełniono {uzupelnione} spółek ze Sztokholmu "
+          f"(sprawdzono {len(szwedzkie)}, szczegóły dla {len(szczegoly)}).")
+    return uzupelnione
 
 
 def domknij_kolumny(rows: list[dict]) -> None:
