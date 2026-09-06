@@ -121,7 +121,12 @@ function KrotkiePozycje({ spolka }: { spolka: Instrument }) {
   const procent = liczba(spolka["Krótkie pozycje (%)"]);
 
   // Rynki, dla których mamy jakiekolwiek źródło. Reszta = nie sprawdzamy.
-  const sprawdzany = sufiks === "" || sufiks === "L";
+  const NADZOR: Record<string, string> = {
+    L: "rejestr brytyjskiego nadzoru (FCA)",
+    WA: "rejestr Komisji Nadzoru Finansowego",
+  };
+  const zrodloRynku = sufiks === "" ? "dane Yahoo dla USA" : NADZOR[sufiks];
+  const sprawdzany = Boolean(zrodloRynku);
 
   if (procent === null) {
     return (
@@ -129,24 +134,25 @@ function KrotkiePozycje({ spolka }: { spolka: Instrument }) {
         {sprawdzany ? (
           <>
             Brak zgłoszonych pozycji krótkich. Przy tym instrumencie sprawdzamy{" "}
-            {sufiks === "L" ? "rejestr brytyjskiego nadzoru (FCA)" : "dane Yahoo dla USA"}
-            , więc pusto znaczy tu „nikt nie przekroczył progu jawności" —
-            a nie „nie wiadomo".
+            {zrodloRynku}, więc pusto znaczy tu „nikt nie przekroczył progu
+            jawności" — a nie „nie wiadomo".
           </>
         ) : (
           <>
             <b>Tego rynku nie sprawdzamy.</b> Krótkie pozycje w Europie
             publikują krajowe nadzory, każdy w innym formacie; na razie
-            zaczytujemy tylko rejestr brytyjski, a dla USA dane z Yahoo. Puste
-            miejsce NIE znaczy, że nikt nie gra na spadek tej spółki — znaczy,
-            że nie mamy tu źródła.
+            zaczytujemy rejestr brytyjski (FCA) i polski (KNF), a dla USA dane
+            z Yahoo. Puste miejsce NIE znaczy, że nikt nie gra na spadek tej
+            spółki — znaczy, że nie mamy tu źródła.
           </>
         )}
       </p>
     );
   }
 
-  const zFCA = zrodlo.startsWith("FCA");
+  // FCA i KNF podają procent wyemitowanego kapitału; Yahoo — wolnego obrotu.
+  const zRejestru = zrodlo.startsWith("FCA") || zrodlo.startsWith("KNF");
+  const nazwaRejestru = zrodlo.startsWith("KNF") ? "rejestr KNF" : "rejestr FCA";
   const dni = liczba(spolka["Short: dni do pokrycia"]);
   const ile = liczba(spolka["Short: liczba pozycji"]);
   const najwiekszy = String(spolka["Short: największy gracz"] ?? "");
@@ -187,9 +193,9 @@ function KrotkiePozycje({ spolka }: { spolka: Instrument }) {
       )}
 
       <p className="pusto" style={{ marginTop: 6 }}>
-        {zFCA ? (
+        {zRejestru ? (
           <>
-            Źródło: <b>rejestr FCA</b> — procent <b>wyemitowanego kapitału</b>,
+            Źródło: <b>{nazwaRejestru}</b> — procent <b>wyemitowanego kapitału</b>,
             zsumowany z pojedynczych zgłoszeń funduszy powyżej progu jawności
             {data && data !== "BRAK" ? `, najnowsze z ${data}` : ""}. Pozycje
             poniżej progu nie są nigdzie zgłaszane, więc to wartość minimalna.

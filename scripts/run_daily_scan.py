@@ -236,20 +236,23 @@ def _sprawdz_alarmy(rows: list[dict]) -> None:
 
 def _uzupelnij_shorty(rows: list[dict]) -> None:
     """
-    Dokłada krótkie pozycje z rejestru FCA dla spółek z Londynu.
+    Dokłada krótkie pozycje z europejskich rejestrów nadzorów.
 
     Dane dla USA są już w wierszach — biorą się z `info` podczas skanowania.
-    Tutaj dochodzi Europa, na razie wyłącznie Londyn: to jedyny rynek, dla
-    którego mamy zaczytany rejestr. Pozostałe mają własne, u własnych
-    nadzorów, i to osobna praca na każdy kraj.
+    Tutaj dochodzi Europa: Londyn (FCA) i Warszawa (KNF). Pozostałe rynki
+    mają własne rejestry u własnych nadzorów i to osobna praca na każdy kraj.
     """
-    try:
-        shorty_mod.uzupelnij_fca(rows)
-    except Exception as e:  # noqa: BLE001
-        print(f"⚠️ Shorty: uzupełnianie nie powiodło się ({type(e).__name__}).")
-    finally:
-        # Zawsze, także po błędzie: wiersze mają mieć ten sam zestaw kolumn.
-        shorty_mod.domknij_kolumny(rows)
+    for nazwa, funkcja in (("FCA", shorty_mod.uzupelnij_fca),
+                           ("KNF", shorty_mod.uzupelnij_knf)):
+        # Każdy rejestr w osobnym try: padnięcie jednego nie może zabrać
+        # danych z drugiego ani przerwać skanu.
+        try:
+            funkcja(rows)
+        except Exception as e:  # noqa: BLE001
+            print(f"⚠️ Shorty {nazwa}: nie powiodło się ({type(e).__name__}).")
+
+    # Zawsze, także po błędach: wiersze mają mieć ten sam zestaw kolumn.
+    shorty_mod.domknij_kolumny(rows)
 
 
 def main() -> None:
