@@ -43,6 +43,9 @@ INDICATOR_GROUPS: dict[str, list[str]] = {
         "Rekomendacja analityków", "Źródło rekomendacji",
         "Rekomendacja z dnia", "Liczba analityków", "% udziałów instytucji",
         "Zmiana ceny docelowej (%)", "Zmiana rekomendacji", "Rewizja od dnia",
+        "Krótkie pozycje (%)", "Short: dni do pokrycia",
+        "Short: liczba akcji (mln)", "Short: liczba pozycji",
+        "Short: największy gracz", "Short z dnia", "Źródło shortów",
     ],
     "Scoring": [
         "Buy Score", "Score: Deep Value", "Score: Momentum",
@@ -203,6 +206,39 @@ INDICATOR_HELP: dict[str, str] = {
         "payout. Uproszczona formuła konserwatywna Blitza i van Vlieta — beta "
         "zamiast zmienności 36-miesięcznej, sama dywidenda zamiast net payout yield."
     ),
+    "Krótkie pozycje (%)": (
+        "Ile kapitału spółki jest sprzedane na krótko. UWAGA — dwie różne miary "
+        "pod jedną nazwą, patrz „Źródło shortów”: dla USA to procent WOLNEGO "
+        "OBROTU (Yahoo), dla Londynu procent WYEMITOWANEGO KAPITAŁU (rejestr "
+        "FCA). Przy spółce z dużym pakietem kontrolnym te liczby potrafią się "
+        "różnić kilkukrotnie. Wysoka wartość znaczy, że wielu inwestorów gra "
+        "na spadek — bywa sygnałem problemów, ale bywa też paliwem do gwałtownego "
+        "wzrostu, gdy pozycje trzeba odkupić."
+    ),
+    "Short: dni do pokrycia": (
+        "Ile dni typowego obrotu zajęłoby odkupienie wszystkich krótkich pozycji "
+        "(short ratio). Powyżej 5 dni odkupywanie zaczyna samo napędzać kurs. "
+        "Dostępne tylko dla spółek z USA."
+    ),
+    "Short: liczba akcji (mln)": (
+        "Liczba akcji sprzedanych na krótko, w milionach. Tylko dla USA."
+    ),
+    "Short: liczba pozycji": (
+        "Ilu zarządzających zgłosiło pozycję krótką powyżej progu jawności. "
+        "Tylko dla Londynu — w USA dane są zbiorcze, bez podziału na fundusze."
+    ),
+    "Short: największy gracz": (
+        "Fundusz z największą zgłoszoną pozycją krótką i jej wielkość. "
+        "Tylko dla Londynu."
+    ),
+    "Short z dnia": (
+        "Data najnowszego zgłoszenia pozycji krótkiej."
+    ),
+    "Źródło shortów": (
+        "Skąd dane: „Yahoo” (USA, procent wolnego obrotu) albo „FCA” (Londyn, "
+        "procent wyemitowanego kapitału). „BRAK” znaczy, że tego rynku NIE "
+        "SPRAWDZAMY — nie że nie ma na nim krótkich pozycji."
+    ),
     "Maksimum dnia": (
         "Najwyższa cena ostatniej sesji. Służy alarmom cenowym: dzięki niej "
         "przebicie progu w ciągu dnia, które do zamknięcia się cofnęło, i tak "
@@ -245,6 +281,7 @@ TEXT_COLUMNS = {
     "Dyw. w poprzednim roku", "Dyw. w tym roku",
     "smc", "Rekomendacja analityków", "Źródło rekomendacji", "Rekomendacja z dnia",
     "Zmiana rekomendacji", "Rewizja od dnia",
+    "Short: największy gracz", "Short z dnia", "Źródło shortów",
 }
 
 DEFAULT_SCREENER_COLUMNS = [

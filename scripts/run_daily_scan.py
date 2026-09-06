@@ -26,6 +26,7 @@ from core.rekomendacje_swiat import uzupelnij as rekomendacje_swiat  # noqa: E40
 from core.rewizje import uzupelnij as rewizje_uzupelnij  # noqa: E402
 from core.rewizje import kandydaci_odniesienia, ma_dane_odniesienia  # noqa: E402
 from core import alarmy as alarmy_mod  # noqa: E402
+from core import shorty as shorty_mod  # noqa: E402
 from core import db as db_mod  # noqa: E402
 
 
@@ -232,6 +233,25 @@ def _sprawdz_alarmy(rows: list[dict]) -> None:
     print(tresc)
 
 
+
+def _uzupelnij_shorty(rows: list[dict]) -> None:
+    """
+    Dokłada krótkie pozycje z rejestru FCA dla spółek z Londynu.
+
+    Dane dla USA są już w wierszach — biorą się z `info` podczas skanowania.
+    Tutaj dochodzi Europa, na razie wyłącznie Londyn: to jedyny rynek, dla
+    którego mamy zaczytany rejestr. Pozostałe mają własne, u własnych
+    nadzorów, i to osobna praca na każdy kraj.
+    """
+    try:
+        shorty_mod.uzupelnij_fca(rows)
+    except Exception as e:  # noqa: BLE001
+        print(f"⚠️ Shorty: uzupełnianie nie powiodło się ({type(e).__name__}).")
+    finally:
+        # Zawsze, także po błędzie: wiersze mają mieć ten sam zestaw kolumn.
+        shorty_mod.domknij_kolumny(rows)
+
+
 def main() -> None:
     today = date.today().isoformat()
     all_rows: list[dict] = []
@@ -266,6 +286,7 @@ def main() -> None:
 
     _uzupelnij_rekomendacje(all_rows)
     _uzupelnij_rewizje(all_rows)
+    _uzupelnij_shorty(all_rows)
 
     # PRZELICZENIE WYNIKÓW STRATEGII — konieczne, nie kosmetyczne.
     # scan_ticker liczy score'y w chwili budowania wiersza, czyli ZANIM

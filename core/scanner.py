@@ -11,6 +11,8 @@ import random
 import time
 import warnings
 from datetime import datetime
+
+from core.shorty import z_yahoo as shorty_z_yahoo
 from urllib.parse import quote
 
 import numpy as np
@@ -1322,6 +1324,10 @@ def analyze_ticker(ticker: str, full_name: str, kind: str = "stock") -> dict | N
             round(info.get("ebitda") / 1e6, 1)
             if isinstance(info.get("ebitda"), (int, float)) else "BRAK"
         ),
+        # Krótka sprzedaż — dostępna w `info` WYŁĄCZNIE dla spółek z USA
+        # (zmierzone: 8/8 dla USA, 0/8 dla każdego rynku europejskiego).
+        # Europę uzupełnia core/shorty.py z rejestrów nadzorów.
+        **shorty_z_yahoo(info),
         # Ekstrema ostatniej sesji — potrzebne alarmom cenowym. Skan chodzi raz
         # na dobę, więc porównywanie progu z ceną ZAMKNIĘCIA gubiłoby każde
         # przebicie, które w ciągu dnia się cofnęło. OHLC i tak mamy pobrane,

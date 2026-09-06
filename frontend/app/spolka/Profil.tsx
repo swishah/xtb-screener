@@ -103,6 +103,113 @@ function Rekomendacja({ spolka }: { spolka: Instrument }) {
   );
 }
 
+/**
+ * Krótkie pozycje. Sekcja istnieje TAKŻE wtedy, gdy danych nie ma — bo puste
+ * miejsce znaczy tu dwie zupełnie różne rzeczy i użytkownik musi wiedzieć,
+ * którą widzi:
+ *
+ *   „nikt nie gra na spadek tej spółki"  vs  „my tego rynku nie sprawdzamy"
+ *
+ * Pomylenie ich jest kosztowne: brak danych o shortach na spółce z GPW
+ * wyglądałby na zielone światło, a znaczy tylko tyle, że nie zaczytujemy
+ * rejestru KNF.
+ */
+function KrotkiePozycje({ spolka }: { spolka: Instrument }) {
+  const ticker = String(spolka.Ticker ?? "");
+  const sufiks = ticker.includes(".") ? ticker.split(".").pop() ?? "" : "";
+  const zrodlo = String(spolka["Źródło shortów"] ?? "");
+  const procent = liczba(spolka["Krótkie pozycje (%)"]);
+
+  // Rynki, dla których mamy jakiekolwiek źródło. Reszta = nie sprawdzamy.
+  const sprawdzany = sufiks === "" || sufiks === "L";
+
+  if (procent === null) {
+    return (
+      <p className="pusto">
+        {sprawdzany ? (
+          <>
+            Brak zgłoszonych pozycji krótkich. Przy tym instrumencie sprawdzamy{" "}
+            {sufiks === "L" ? "rejestr brytyjskiego nadzoru (FCA)" : "dane Yahoo dla USA"}
+            , więc pusto znaczy tu „nikt nie przekroczył progu jawności" —
+            a nie „nie wiadomo".
+          </>
+        ) : (
+          <>
+            <b>Tego rynku nie sprawdzamy.</b> Krótkie pozycje w Europie
+            publikują krajowe nadzory, każdy w innym formacie; na razie
+            zaczytujemy tylko rejestr brytyjski, a dla USA dane z Yahoo. Puste
+            miejsce NIE znaczy, że nikt nie gra na spadek tej spółki — znaczy,
+            że nie mamy tu źródła.
+          </>
+        )}
+      </p>
+    );
+  }
+
+  const zFCA = zrodlo.startsWith("FCA");
+  const dni = liczba(spolka["Short: dni do pokrycia"]);
+  const ile = liczba(spolka["Short: liczba pozycji"]);
+  const najwiekszy = String(spolka["Short: największy gracz"] ?? "");
+  const data = String(spolka["Short z dnia"] ?? "");
+
+  // Progi z praktyki rynkowej, nie z naszych pomiarów — stąd ostrożne słowa.
+  const ocena =
+    procent >= 10 ? "bardzo wysokie" : procent >= 5 ? "wysokie" : procent >= 2 ? "zauważalne" : "niskie";
+
+  return (
+    <div className="rek">
+      <div className="rek-poz">
+        <span className="rek-etykieta">Sprzedane na krótko</span>
+        <strong>
+          {procent.toLocaleString("pl-PL", { maximumFractionDigits: 2 })}%
+        </strong>
+        <span className="brak">{ocena}</span>
+      </div>
+
+      {dni !== null && (
+        <div className="rek-poz">
+          <span className="rek-etykieta">Dni do pokrycia</span>
+          <strong>{dni.toLocaleString("pl-PL", { maximumFractionDigits: 1 })}</strong>
+          <span className="brak">
+            tyle dni typowego obrotu zajęłoby odkupienie tych akcji
+          </span>
+        </div>
+      )}
+
+      {ile !== null && (
+        <div className="rek-poz">
+          <span className="rek-etykieta">Zgłoszone pozycje</span>
+          <strong>{ile}</strong>
+          {najwiekszy && najwiekszy !== "BRAK" && (
+            <span className="brak">największa: {najwiekszy}</span>
+          )}
+        </div>
+      )}
+
+      <p className="pusto" style={{ marginTop: 6 }}>
+        {zFCA ? (
+          <>
+            Źródło: <b>rejestr FCA</b> — procent <b>wyemitowanego kapitału</b>,
+            zsumowany z pojedynczych zgłoszeń funduszy powyżej progu jawności
+            {data && data !== "BRAK" ? `, najnowsze z ${data}` : ""}. Pozycje
+            poniżej progu nie są nigdzie zgłaszane, więc to wartość minimalna.
+          </>
+        ) : (
+          <>
+            Źródło: <b>Yahoo Finance</b> — procent <b>wolnego obrotu</b>, nie
+            całego kapitału. To inna miara niż europejska: przy spółce z dużym
+            pakietem kontrolnym obie potrafią się różnić kilkukrotnie
+            {data && data !== "BRAK" ? `. Dane z ${data}` : ""}.
+          </>
+        )}{" "}
+        Wysoki short bywa sygnałem problemów, ale bywa też paliwem do
+        gwałtownego wzrostu, gdy pozycje trzeba odkupić. To opis liczby, nie
+        rekomendacja.
+      </p>
+    </div>
+  );
+}
+
 export default function Profil({
   spolka,
   wszystkie,
@@ -159,6 +266,11 @@ export default function Profil({
       <section className="sekcja">
         <h3>Analitycy</h3>
         <Rekomendacja spolka={spolka} />
+      </section>
+
+      <section className="sekcja">
+        <h3>Krótkie pozycje</h3>
+        <KrotkiePozycje spolka={spolka} />
       </section>
 
       {GRUPY.map((grupa) => (
