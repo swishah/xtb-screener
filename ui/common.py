@@ -16,8 +16,14 @@ from core.scanner import get_fx_rates, get_next_earnings_date, get_sp400_map, ge
 # pokazywanymi jako dymek (hover) na nagłówku kolumny w tabeli.
 # ---------------------------------------------------------------------------
 INDICATOR_GROUPS: dict[str, list[str]] = {
-    "Podstawowe": ["Rynek", "Typ", "Sektor", "Branża", "Waluta", "Cena (PLN)", "Kapitalizacja (mld)"],
-    "Wycena": ["C/Z (P/E)", "Forward C/Z", "C/WK (P/B)"],
+    "Podstawowe": [
+        "Rynek", "Typ", "Sektor", "Branża", "Waluta", "Cena (PLN)",
+        "Kapitalizacja (mld)", "Przychody (mln)",
+    ],
+    "Wycena": [
+        "C/Z (P/E)", "Forward C/Z", "C/WK (P/B)",
+        "Wartość przedsiębiorstwa (mld)", "EBITDA (mln)",
+    ],
     "Rentowność i wzrost": [
         "ROE (%)", "Marża Operac. (%)", "Marża netto (%)", "Marża brutto (%)",
         "Wzrost przychodów (%)", "Wzrost EPS (%)",
@@ -38,7 +44,8 @@ INDICATOR_GROUPS: dict[str, list[str]] = {
     ],
     "Scoring": [
         "Buy Score", "Score: Deep Value", "Score: Momentum",
-        "Score: Dywidendowa", "Score: Dywidenda-Okazja",
+        "Score: Dywidendowa", "Score: Dywidenda-Okazja", "Score: F-Score Lite",
+        "Score: Blisko Szczytu", "Score: Konserwatywna", "Score: Wartość Złożona",
     ],
 }
 
@@ -68,6 +75,25 @@ INDICATOR_HELP: dict[str, str] = {
         "Wartość rynkowa całej spółki (cena × liczba akcji), w mld jednostek waluty notowania. "
         "Duża kapitalizacja (>10 mld) = zwykle stabilniejsza, wolniej rosnąca spółka; "
         "mała (<2 mld) = większy potencjał wzrostu, ale i większe ryzyko."
+    ),
+    "Przychody (mln)": (
+        "Roczne przychody ze sprzedaży, w mln jednostek waluty notowania. "
+        "Sama wielkość niewiele mówi — służy do porównania z kapitalizacją "
+        "(wskaźnik C/P). Spółka warta mniej niż roczne przychody bywa okazją, "
+        "ale bywa też firmą o bardzo niskiej marży."
+    ),
+    "Wartość przedsiębiorstwa (mld)": (
+        "EV — kapitalizacja plus dług minus gotówka, w mld waluty notowania. "
+        "Tyle realnie kosztowałoby przejęcie spółki. W odróżnieniu od samej "
+        "kapitalizacji nie da się nabrać na spółkę tanią wyłącznie dlatego, "
+        "że jest mocno zadłużona."
+    ),
+    "EBITDA (mln)": (
+        "Zysk operacyjny przed amortyzacją, w mln waluty notowania. Razem "
+        "z wartością przedsiębiorstwa daje EV/EBITDA — miarę wyceny "
+        "odporniejszą niż C/Z na różnice w zadłużeniu i polityce amortyzacji. "
+        "Dla banków i ubezpieczycieli Yahoo tego nie podaje i słusznie: EBITDA "
+        "nie ma dla nich sensu ekonomicznego."
     ),
     "C/Z (P/E)": (
         "Cena do zysku na akcję — ile lat zysku 'kosztuje' spółka przy obecnej cenie. "
@@ -159,6 +185,27 @@ INDICATOR_HELP: dict[str, str] = {
     "Score: Momentum": "Premiuje spółki w silnym, potwierdzonym trendzie wzrostowym.",
     "Score: Dywidendowa": "Premiuje solidną stopę dywidendy przy zdrowych fundamentach i nieprzerwanej historii wypłat.",
     "Score: Dywidenda-Okazja": "Wysoka dywidenda przy cenie, która jeszcze się nie ruszyła, plus bezpieczny payout ratio.",
+    "Score: F-Score Lite": (
+        "Osiem sygnałów jakości fundamentalnej liczonych na bieżącym stanie: ROA, "
+        "przepływy operacyjne, ROE, marża netto, wzrost EPS i przychodów, "
+        "zadłużenie, marża brutto. Nie porównuje rok do roku — stąd 'lite'."
+    ),
+    "Score: Blisko Szczytu": (
+        "Jak blisko 52-tygodniowego maksimum jest kurs, plus zabezpieczenia "
+        "(RSI, wzrost EPS, zadłużenie). Wg George'a i Hwanga bliskość rocznego "
+        "szczytu przewiduje zwroty lepiej niż same przeszłe stopy zwrotu."
+    ),
+    "Score: Konserwatywna": (
+        "Niska beta, dodatnia roczna zmiana ceny i solidna dywidenda o bezpiecznym "
+        "payout. Uproszczona formuła konserwatywna Blitza i van Vlieta — beta "
+        "zamiast zmienności 36-miesięcznej, sama dywidenda zamiast net payout yield."
+    ),
+    "Score: Wartość Złożona": (
+        "Trzy miary wyceny naraz (C/Z, C/WK, C/CF), każda ważona tak samo, plus "
+        "kontrola marży netto i ROE. Mieszanka miar bije pojedynczy wskaźnik, bo "
+        "każda ma inną słabość. To JEST strategia taniości — w odróżnieniu od "
+        "Deep Value, który wybiera spółki przecenione."
+    ),
 }
 
 TEXT_COLUMNS = {

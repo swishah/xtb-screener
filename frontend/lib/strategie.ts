@@ -137,20 +137,27 @@ export const STRATEGIE: Strategia[] = [
   },
   {
     klucz: "wartosc-zlozona",
-    nazwa: "Wartość złożona (C/Z + C/WK + C/CF)",
+    nazwa: "Wartość złożona (5 miar wyceny)",
     kolumnaScore: "Score: Wartość Złożona",
-    maks: 11,
+    maks: 17,
     opis:
-      "Trzy miary wyceny zamiast jednej, każda ważona tak samo. Powstała, bo " +
-      "pomiar pokazał, że Deep Value selekcjonuje spółki przecenione, a nie " +
-      "tanie — czynnik wartości był u nas nieobsadzony. Literatura (Value " +
-      "Composite O'Shaughnessy'ego) pokazuje, że mieszanka miar bije " +
-      "pojedynczy wskaźnik, bo każda ma inną słabość. Oryginał używa sześciu " +
-      "miar; my mamy trzy. Plus kontrola marży netto i ROE, żeby „tanio” nie " +
-      "znaczyło „zarabia coraz mniej”.",
+      "Pięć miar wyceny zamiast jednej, każda ważona tak samo: C/Z, C/WK, " +
+      "C/CF, C/P i EV/EBITDA. Powstała, bo pomiar pokazał, że Deep Value " +
+      "selekcjonuje spółki przecenione, a nie tanie — czynnik wartości był " +
+      "u nas nieobsadzony. Literatura (Value Composite O'Shaughnessy'ego) " +
+      "pokazuje, że mieszanka miar bije pojedynczy wskaźnik, bo każda ma inną " +
+      "słabość: C/P działa, gdy spółka chwilowo nie zarabia, a EV/EBITDA jako " +
+      "jedyna widzi dług. Brakuje tylko shareholder yield. Plus kontrola marży " +
+      "netto i ROE, żeby „tanio” nie znaczyło „zarabia coraz mniej”. UWAGA NA " +
+      "BANKI I UBEZPIECZYCIELI: Yahoo nie podaje dla nich EBITDA (i słusznie, " +
+      "bo nie ma dla nich sensu ekonomicznego), więc mogą zebrać najwyżej 14 " +
+      "z 17 punktów. Tani bank wypadnie tu niżej niż równie tania spółka " +
+      "przemysłowa — porównuj je między sobą, nie z resztą rynku.",
     kolumny: [
       "C/Z (P/E)", "C/WK (P/B)", "Kapitalizacja (mld)",
-      "Przepływy operacyjne (mln)", "Marża netto (%)", "ROE (%)", "Liczba flag",
+      "Przepływy operacyjne (mln)", "Przychody (mln)",
+      "Wartość przedsiębiorstwa (mld)", "EBITDA (mln)", "Marża netto (%)",
+      "ROE (%)", "Liczba flag",
     ],
   },
 ];
@@ -173,6 +180,8 @@ const ETYKIETY: Record<string, string> = {
   "Lata z dywidendą (3Y)": "Lat z dyw.",
   "52-tyg. maksimum": "52-tyg. maks.",
   "Kapitalizacja (mld)": "Kap. (mld)",
+  "Przychody (mln)": "Przychody (mln)",
+  "Wartość przedsiębiorstwa (mld)": "EV (mld)",
   "Zmiana ceny (1Y%)": "Zmiana 1R",
   "Dyw. w poprzednim roku": "Dyw. rok temu",
   "Dyw. w tym roku": "Dyw. w tym roku",

@@ -64,14 +64,19 @@ STRATEGY_DESCRIPTIONS = {
         "skupu akcji własnych nie mamy). Spółki oddające gotówkę głównie przez "
         "buyback będą tu niedoszacowane."
     ),
-    "Wartość złożona (C/Z + C/WK + C/CF)": (
-        "Trzy miary wyceny zamiast jednej, każda ważona tak samo. Powstała, bo "
-        "pomiar pokazał, że Deep Value selekcjonuje spółki przecenione, a nie "
-        "tanie — czynnik wartości był nieobsadzony. Literatura (Value Composite "
-        "O'Shaughnessy'ego) pokazuje, że mieszanka miar bije pojedynczy "
-        "wskaźnik, bo każda ma inną słabość. Oryginał używa sześciu miar; my "
-        "mamy trzy. Plus kontrola marży netto i ROE, żeby 'tanio' nie znaczyło "
-        "'zarabia coraz mniej'."
+    "Wartość złożona (5 miar wyceny)": (
+        "Pięć miar wyceny zamiast jednej, każda ważona tak samo: C/Z, C/WK, "
+        "C/CF, C/P i EV/EBITDA. Powstała, bo pomiar pokazał, że Deep Value "
+        "selekcjonuje spółki przecenione, a nie tanie — czynnik wartości był "
+        "nieobsadzony. Literatura (Value Composite O'Shaughnessy'ego) pokazuje, "
+        "że mieszanka miar bije pojedynczy wskaźnik, bo każda ma inną słabość: "
+        "C/P działa, gdy spółka chwilowo nie zarabia, a EV/EBITDA jako jedyna "
+        "widzi dług. Brakuje tylko shareholder yield. Plus kontrola marży netto "
+        "i ROE, żeby 'tanio' nie znaczyło 'zarabia coraz mniej'. "
+        "UWAGA NA BANKI I UBEZPIECZYCIELI: Yahoo nie podaje dla nich EBITDA "
+        "(i słusznie, bo nie ma dla nich sensu ekonomicznego), więc mogą zebrać "
+        "najwyżej 14 z 17 punktów. Tani bank wypadnie tu niżej niż równie tania "
+        "spółka przemysłowa — porównuj je między sobą, nie z resztą rynku."
     ),
 }
 STRATEGY_COLUMNS = {
@@ -106,9 +111,10 @@ STRATEGY_COLUMNS = {
         "Ticker", "Nazwa", "Rynek", "Cena", "Beta", "Zmiana ceny (1Y%)",
         "Stopa Dyw. (%)", "Payout ratio (%)", "Liczba flag",
     ],
-    "Wartość złożona (C/Z + C/WK + C/CF)": [
+    "Wartość złożona (5 miar wyceny)": [
         "Ticker", "Nazwa", "Rynek", "Cena", "C/Z (P/E)", "C/WK (P/B)",
-        "Kapitalizacja (mld)", "Przepływy operacyjne (mln)", "Marża netto (%)",
+        "Kapitalizacja (mld)", "Przepływy operacyjne (mln)", "Przychody (mln)",
+        "Wartość przedsiębiorstwa (mld)", "EBITDA (mln)", "Marża netto (%)",
         "ROE (%)", "Liczba flag",
     ],
 }

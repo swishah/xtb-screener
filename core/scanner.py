@@ -444,13 +444,19 @@ def composite_value_score(row: dict) -> int:
     Literatura (m.in. Value Composite O'Shaughnessy'ego) konsekwentnie
     pokazuje, że mieszanka kilku miar wyceny bije pojedynczy wskaźnik: każda
     miara ma inną słabość, a pomyłki nie kumulują się tak łatwo. Oryginał
-    używa sześciu miar; my mamy trzy — C/Z, C/WK i C/CF liczone
-    z kapitalizacji i przepływów operacyjnych. Brakuje C/P, EV/EBITDA
-    i shareholder yield.
+    używa sześciu miar; my mamy PIĘĆ — C/Z, C/WK, C/CF, C/P i EV/EBITDA.
+    Brakuje wyłącznie shareholder yield, bo wymaga historii skupu akcji
+    własnych, której nie ma w naszym źródle.
 
-    Każda z trzech miar waży tyle samo (2 punkty za tanio, 1 za bardzo tanio),
-    żeby żadna nie zdominowała wyniku. Progi to pierwszy i dziesiąty decyl
-    naszego uniwersum: C/Z 15 i 10,5; C/WK 1,75 i 1,2; C/CF 8,5 i 5,2.
+    Każda miara waży tyle samo (2 punkty za tanio, 1 za bardzo tanio), żeby
+    żadna nie zdominowała wyniku. Progi to pierwszy i dziesiąty decyl naszego
+    uniwersum: C/Z 15 i 10,5; C/WK 1,75 i 1,2; C/CF 8,5 i 5,2; C/P 1,15
+    i 0,65; EV/EBITDA 10,5 i 7,3.
+
+    Nie każda spółka ma komplet pięciu miar — bankom Yahoo nie podaje EBITDA
+    (i słusznie, bo nie ma dla nich sensu ekonomicznego), więc EV/EBITDA
+    policzyliśmy dla 86% próby. Brakująca miara to po prostu zero punktów,
+    a nie błąd: spółka bez EBITDA może nadal zebrać komplet z pozostałych.
     """
     pts = 0
     pe = row.get("C/Z (P/E)")
@@ -478,6 +484,29 @@ def composite_value_score(row: dict) -> int:
         if p_cf < 5.2:
             pts += 1
 
+    # C/P — kapitalizacja do przychodów. Jedyna miara odporna na to, że
+    # spółka chwilowo nie zarabia: przychody są dużo stabilniejsze niż zysk.
+    przychody = row.get("Przychody (mln)")
+    if (isinstance(mcap, (int, float)) and isinstance(przychody, (int, float))
+            and mcap > 0 and przychody > 0):
+        p_s = (mcap * 1000) / przychody
+        if p_s < 1.15:
+            pts += 2
+        if p_s < 0.65:
+            pts += 1
+
+    # EV/EBITDA — jedyna miara, która widzi dług. Spółka tania wg C/Z tylko
+    # dlatego, że jest zadłużona po uszy, tutaj tania już nie będzie.
+    ev = row.get("Wartość przedsiębiorstwa (mld)")
+    ebitda = row.get("EBITDA (mln)")
+    if (isinstance(ev, (int, float)) and isinstance(ebitda, (int, float))
+            and ev > 0 and ebitda > 0):
+        ev_ebitda = (ev * 1000) / ebitda
+        if ev_ebitda < 10.5:
+            pts += 2
+        if ev_ebitda < 7.3:
+            pts += 1
+
     # Zabezpieczenie przed pułapką wartości: tanio ma znaczyć "przecenione",
     # a nie "zarabia coraz mniej".
     net_margin = row.get("Marża netto (%)")
@@ -497,7 +526,7 @@ STRATEGIES = {
     "Jakość fundamentalna (F-Score uproszczony)": ("Score: F-Score Lite", piotroski_lite_score),
     "Blisko szczytu (52 tyg.)": ("Score: Blisko Szczytu", near_high_score),
     "Formuła konserwatywna (lite)": ("Score: Konserwatywna", conservative_score),
-    "Wartość złożona (C/Z + C/WK + C/CF)": ("Score: Wartość Złożona", composite_value_score),
+    "Wartość złożona (5 miar wyceny)": ("Score: Wartość Złożona", composite_value_score),
 }
 
 # Maksymalne teoretyczne wartości każdego score'a — zweryfikowane empirycznie
@@ -512,7 +541,7 @@ STRATEGY_MAX_SCORES = {
     "Score: F-Score Lite": 8,
     "Score: Blisko Szczytu": 8,
     "Score: Konserwatywna": 8,
-    "Score: Wartość Złożona": 11,
+    "Score: Wartość Złożona": 17,
 }
 
 
@@ -1181,6 +1210,31 @@ def analyze_ticker(ticker: str, full_name: str, kind: str = "stock") -> dict | N
         "Przepływy operacyjne (mln)": (
             round(info.get("operatingCashflow") / 1e6, 1)
             if isinstance(info.get("operatingCashflow"), (int, float)) else "BRAK"
+        ),
+        # Trzy poniższe są podstawą miar wyceny, których dotąd nie mieliśmy:
+        # C/P (kapitalizacja / przychody) oraz EV/EBITDA. Wszystkie trzy siedzą
+        # w tym samym `info`, więc nie kosztują ani jednego zapytania więcej.
+        #
+        # UWAGA — czego tu NIE ma i dlaczego: `totalAssets` oraz
+        # `capitalExpenditures` NIE występują w `info` (sprawdzone na próbie
+        # 10 spółek: 0/10). Wymagałyby osobnego zapytania o bilans NA KAŻDĄ
+        # spółkę, czyli trzeciego wywołania API w skanie ~1300 instrumentów.
+        # Bez nich nie da się policzyć GP/A Novy-Marxa ani zysku operacyjnego
+        # w rozumieniu Carlisle'a. Próba wyprowadzenia GP/A z marż i ROA
+        # (GP/A = marża brutto / marża netto × ROA) została sprawdzona
+        # i ODRZUCONA: mediana błędu 26%, najgorszy przypadek 128% — za dużo
+        # jak na wskaźnik, który ma szeregować spółki.
+        "Przychody (mln)": (
+            round(info.get("totalRevenue") / 1e6, 1)
+            if isinstance(info.get("totalRevenue"), (int, float)) else "BRAK"
+        ),
+        "Wartość przedsiębiorstwa (mld)": (
+            round(info.get("enterpriseValue") / 1e9, 2)
+            if isinstance(info.get("enterpriseValue"), (int, float)) else "BRAK"
+        ),
+        "EBITDA (mln)": (
+            round(info.get("ebitda") / 1e6, 1)
+            if isinstance(info.get("ebitda"), (int, float)) else "BRAK"
         ),
     }
 
