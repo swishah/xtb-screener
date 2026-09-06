@@ -19,6 +19,10 @@ sprzedaży pozycje powyżej progu są JAWNE i publikowane przez nadzory.
   4. **Frankfurt — Bundesanzeiger.** Gotowy eksport CSV całej listy, ale za
      sesją: najpierw trzeba wejść na stronę po ciasteczko, bo adres pliku
      zawiera identyfikator stanu strony. Próg też 0,5%.
+  5. **Paryż — AMF przez data.gouv.fr.** Najczystsze źródło w zestawie:
+     oficjalne otwarte dane na Licencji Otwartej 2.0, aktualizowane codziennie,
+     wprost przeznaczone do przetwarzania automatycznego. Żadnych wątpliwości
+     co do dozwolonego użycia.
 
 DWIE LICZBY, KTÓRE WYGLĄDAJĄ TAK SAMO, A ZNACZĄ CO INNEGO. Yahoo podaje
 procent **wolnego obrotu** (free float), FCA — procent **wyemitowanego
@@ -27,10 +31,10 @@ się różnić kilkukrotnie. Dlatego zapisujemy źródło osobno i profil spół
 mówi wprost, co jest czym. **Nie sklejaj tych wartości w jedną kolumnę bez
 źródła.**
 
-CZEGO NIE MA. Pozostałe rynki europejskie (Paryż, Mediolan, Madryt,
-Sztokholm, Oslo, Wiedeń, Lizbona) mają własne rejestry u własnych nadzorów —
-AMF, CONSOB, CNMV i tak dalej — każdy w innym formacie. To osobna praca na
-każdy kraj i NIE jest zrobiona.
+CZEGO NIE MA. Pozostałe rynki europejskie (Mediolan, Madryt, Sztokholm,
+Oslo, Wiedeń, Lizbona) mają własne rejestry u własnych nadzorów — CONSOB,
+CNMV i tak dalej — każdy w innym formacie. To osobna praca na każdy kraj
+i NIE jest zrobiona.
 Brak danych o shortach dla tych rynków nie znaczy „brak shortów", tylko
 „nie sprawdzamy". Profil spółki mówi to wprost, żeby nikt nie wziął pustego
 pola za zielone światło.
@@ -595,6 +599,154 @@ def uzupelnij_de(rows: list[dict]) -> int:
 
     print(f"📉 Shorty: uzupełniono {uzupelnione} spółek z Frankfurtu "
           f"(sprawdzono {len(niemieckie)}).")
+    return uzupelnione
+
+
+# ---------------------------------------------------------------------------
+# Paryż — AMF przez data.gouv.fr
+# ---------------------------------------------------------------------------
+
+# Adres PLIKU zmienia się codziennie (zawiera znacznik czasu), więc pytamy
+# o niego API portalu. Ono jest stałe.
+API_AMF = (
+    "https://www.data.gouv.fr/api/1/datasets/"
+    "historique-des-positions-courtes-nettes-sur-actions-rendues-"
+    "publiques-depuis-le-1er-novembre-2012/"
+)
+
+_SZUM_FR = re.compile(
+    r"\b(sa|sas|sca|se|scr|societe|group|groupe|holding|holdings|company|co|"
+    r"plc|ltd|limited|nv|ag|inc|the|et|and)\b",
+    re.I,
+)
+_AKCENTY = str.maketrans("àâäçéèêëîïôöùûüÿœæ", "aaaceeeeiioouuuyoa")
+
+
+def klucz_fr(nazwa: str) -> str:
+    """Nazwa bez odstępów, akcentów i form prawnych."""
+    t = str(nazwa or "").lower().translate(_AKCENTY).replace("&", " and ")
+    t = re.sub(r"[^a-z0-9 ]", " ", t)
+    t = _SZUM_FR.sub(" ", t)
+    return re.sub(r"\s+", "", t)
+
+
+def rejestr_amf(api: str = API_AMF) -> dict[str, dict]:
+    """
+    Otwarte pozycje krótkie z rejestru AMF, kluczowane skrótem nazwy emitenta.
+
+    KTÓRA POZYCJA JEST OTWARTA — to tu najłatwiej się pomylić. Plik ma pełną
+    historię od 2012 (40 tys. wierszy), a każdy wiersz to jedno ZGŁOSZENIE,
+    nie jedna pozycja: ten sam fundusz zgłasza tę samą pozycję wielokrotnie,
+    gdy ją zmienia. Sumowanie wszystkiego bez daty końca publikacji dawało
+    Valeo 720% kapitału na krótko, czyli wynik fizycznie niemożliwy.
+
+    Poprawnie: dla każdej pary (fundusz, ISIN) bierzemy NAJNOWSZE zgłoszenie
+    i uznajemy pozycję za otwartą tylko wtedy, gdy nie ma ono daty końca
+    publikacji. Po tej poprawce najwyższa suma to 13,3% (Ubisoft) — wartość,
+    która ma sens.
+    """
+    try:
+        req = urllib.request.Request(api, headers={"User-Agent": UA})
+        with urllib.request.urlopen(req, timeout=45) as odp:
+            meta = json.loads(odp.read().decode("utf-8", "replace"))
+        url = next(
+            r["url"] for r in meta.get("resources", [])
+            if str(r.get("format", "")).lower() == "csv"
+        )
+        req = urllib.request.Request(url, headers={"User-Agent": UA})
+        with urllib.request.urlopen(req, timeout=180) as odp:
+            tekst = odp.read().decode("utf-8-sig", "replace")
+    except Exception as e:  # noqa: BLE001
+        print(f"⚠️ Shorty AMF: nie udało się pobrać rejestru ({type(e).__name__}).")
+        return {}
+
+    POSIADACZ = "Detenteur de la position courte nette"
+    EMITENT = "Emetteur / issuer"
+    POCZATEK = "Date de debut position"
+    KONIEC = "Date de fin de publication position"
+
+    najnowsze: dict[tuple, tuple] = {}
+    try:
+        for w in csv.DictReader(io.StringIO(tekst), delimiter=";"):
+            isin = (w.get("code ISIN") or "").strip()
+            posiadacz = (w.get(POSIADACZ) or "").strip()
+            if not isin or not posiadacz:
+                continue
+            data = (w.get(POCZATEK) or "")[:10]
+            klucz = (posiadacz, isin)
+            if klucz not in najnowsze or data > najnowsze[klucz][0]:
+                najnowsze[klucz] = (data, w)
+    except Exception as e:  # noqa: BLE001
+        print(f"⚠️ Shorty AMF: błąd przy czytaniu CSV ({type(e).__name__}).")
+        return {}
+
+    wg_emitenta: dict[str, list[tuple]] = defaultdict(list)
+    for data, w in najnowsze.values():
+        if (w.get(KONIEC) or "").strip():
+            continue  # publikacja zakończona — pozycja zamknięta
+        procent = _procent_z_tekstu(w.get("Ratio"))
+        emitent = (w.get(EMITENT) or "").strip()
+        if procent is None or not emitent:
+            continue
+        wg_emitenta[emitent].append(
+            ((w.get(POSIADACZ) or "").strip(), procent, data)
+        )
+
+    wynik: dict[str, dict] = {}
+    for emitent, pozycje in wg_emitenta.items():
+        k = klucz_fr(emitent)
+        if not k:
+            continue
+        najwiekszy = max(pozycje, key=lambda x: x[1])
+        wynik[k] = {
+            "procent": round(sum(x[1] for x in pozycje), 2),
+            "liczba": len(pozycje),
+            "najwiekszy_kto": najwiekszy[0],
+            "najwiekszy_ile": round(najwiekszy[1], 2),
+            "data": max(x[2] for x in pozycje),
+        }
+
+    print(f"📉 Shorty AMF: {len(wynik)} emitentów z otwartą pozycją krótką.")
+    return wynik
+
+
+def uzupelnij_fr(rows: list[dict]) -> int:
+    """
+    Dokłada dane o shortach spółkom z Paryża.
+
+    Dopasowanie WYŁĄCZNIE przez równość nazw, z tego samego powodu co przy
+    Frankfurcie. Luźniejsza reguła przypisywała **Société Générale** pozycję
+    krótką **Michelina** — bo pełna nazwa Michelina to „Compagnie Générale
+    des Établissements Michelin" i słowo „générale" pasuje do obu. Tracimy
+    przez to samego Michelina, i trudno: lepiej nie pokazać nic, niż pokazać
+    cudzy short. **Nie luzuj tego dopasowania.**
+    """
+    francuskie = [r for r in rows if str(r.get("Ticker", "")).endswith(".PA")]
+    if not francuskie:
+        return 0
+
+    rejestr = rejestr_amf()
+    if not rejestr:
+        return 0
+
+    uzupelnione = 0
+    for r in francuskie:
+        if r.get("Krótkie pozycje (%)") not in (None, "", "BRAK"):
+            continue
+        dane = rejestr.get(klucz_fr(r.get("Nazwa", "")))
+        if not dane:
+            continue
+        r["Krótkie pozycje (%)"] = dane["procent"]
+        r["Short: liczba pozycji"] = dane["liczba"]
+        r["Short: największy gracz"] = (
+            f"{dane['najwiekszy_kto']} ({dane['najwiekszy_ile']}%)"
+        )
+        r["Short z dnia"] = dane["data"]
+        r["Źródło shortów"] = "AMF — % wyemitowanego kapitału"
+        uzupelnione += 1
+
+    print(f"📉 Shorty: uzupełniono {uzupelnione} spółek z Paryża "
+          f"(sprawdzono {len(francuskie)}).")
     return uzupelnione
 
 
