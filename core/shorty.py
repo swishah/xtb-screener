@@ -30,7 +30,12 @@ sprzedaży pozycje powyżej progu są JAWNE i publikowane przez nadzory.
      z prawdziwym API JSON: jedno zapytanie daje całą giełdę, bez sesji,
      bez pliku i bez udawania przeglądarki. Podaje też ISIN, którego my
      nie mamy — patrz niżej.
-  8. **Paryż — AMF przez data.gouv.fr.** Najczystsze źródło w zestawie:
+  8. **Lizbona — CMVM (Sistema de Difusão de Informação).** Jedyny rejestr
+     bez publicznego adresu z danymi: serwis to aplikacja jednostronicowa
+     (OutSystems), która ciągnie dane własnym RPC. Odtworzyliśmy trzy
+     wywołania, jakie wykonuje sama strona — szczegóły przy `rejestr_cmvm()`.
+     Daje za to komplet: procent, nazwy funduszy, daty i ISIN.
+  9. **Paryż — AMF przez data.gouv.fr.** Najczystsze źródło w zestawie:
      oficjalne otwarte dane na Licencji Otwartej 2.0, aktualizowane codziennie,
      wprost przeznaczone do przetwarzania automatycznego. Żadnych wątpliwości
      co do dozwolonego użycia.
@@ -42,8 +47,13 @@ się różnić kilkukrotnie. Dlatego zapisujemy źródło osobno i profil spół
 mówi wprost, co jest czym. **Nie sklejaj tych wartości w jedną kolumnę bez
 źródła.**
 
-CZEGO NIE MA. Wiedeń i Lizbona mają własne rejestry u własnych nadzorów,
-każdy w innym formacie — osobna praca na każdy kraj, NIE zrobiona. **Mediolan jest zablokowany świadomie:** CONSOB odsiewa
+CZEGO NIE MA. Wiedeń — rejestr istnieje (FMA), ale stoi na hoście
+`webhost.fma.gv.at`, który z naszej sieci nie przyjmuje połączeń: osiem prób,
+porty 80 i 443, timeout na poziomie TCP, przy jednoczesnej odpowiedzi
+`www.fma.gv.at` i pozostałych rejestrów. To jedyna droga publikacji FMA —
+żadnego pliku, lustra ani zestawu na data.gv.at. NIE piszemy parsera w ciemno:
+strona jest formularzem ASP.NET, którego nigdy nie widzieliśmy, a kod na domysł
+zwracałby zero po cichu. **Mediolan jest zablokowany świadomie:** CONSOB odsiewa
 klienty niebędące przeglądarką stroną CAPTCHA (Radware), a obchodzenia
 zabezpieczeń przed botami nie robimy. Ich plik jest zresztą wzorowy —
 gdyby CONSOB udostępnił dostęp programistyczny (adres kontaktowy:
@@ -1202,6 +1212,275 @@ def uzupelnij_no(rows: list[dict]) -> int:
 
     print(f"📉 Shorty: uzupełniono {uzupelnione} spółek z Oslo "
           f"(sprawdzono {len(norweskie)}).")
+    return uzupelnione
+
+
+# ---------------------------------------------------------------------------
+# Lizbona — CMVM (Sistema de Difusão de Informação)
+# ---------------------------------------------------------------------------
+
+BAZA_CMVM = "https://www.cmvm.pt/PInstitucional/"
+
+# Nazwy modułów aplikacji. Z nich składamy i adresy RPC, i adresy skryptów,
+# z których czytamy `apiVersion` — dzięki temu jedna literówka nie rozjedzie
+# obu miejsc.
+_MOD_CMVM = "CMVM_SDI_Emitentes_CW/InteressesDescobertoRelevantes/"
+_EKRAN_LISTA = _MOD_CMVM + "InteressesDescobertoRelevantes/DataActionDataAction1"
+_EKRAN_DETAL = (_MOD_CMVM + "InteressesDescobertoRelevantesDet/"
+                            "DataActionGetDescobertoRelevante")
+_SKRYPTY_CMVM = (
+    "scripts/CMVM_SDI_Emitentes_CW.InteressesDescobertoRelevantes"
+    ".InteressesDescobertoRelevantes.mvc.js",
+    "scripts/CMVM_SDI_Emitentes_CW.InteressesDescobertoRelevantes"
+    ".InteressesDescobertoRelevantesDet.mvc.js",
+)
+
+# Żeton CSRF dla użytkownika NIEZALOGOWANEGO. To nie jest nic wykradzionego:
+# stała `AnonymousCSRFToken` siedzi jawnie w bibliotece klienckiej OutSystems
+# (`scripts/OutSystems.js`) i jest wysyłana przez każdą przeglądarkę, która
+# nie ma ciasteczka sesji. Dokładnie w tej roli jej używamy.
+_CSRF_ANONIM = "T6C+9iB49TLra4jEsMeSckDMNhQ="
+
+# Ile podstron emitentów wolno pobrać w jednym skanie.
+LIMIT_CMVM_SZCZEGOLOW = 40
+
+# Portugalskie nazwy mają kształt „Marka - opis prawny, SGPS, S.A.".
+# Ucinamy wszystko od pierwszego „ - " albo przecinka, plus nawiasy.
+_OPIS_PT = re.compile(r"\s+[-\u2013]\s+.*$|,.*$|\(.*?\)")
+
+
+def slowa_pt(nazwa: str) -> str:
+    """
+    Normalizacja dla Lizbony: sam człon markowy nazwy.
+
+    Wspólna `slowa()` tu nie wystarcza, bo formy portugalskie („SGPS",
+    „Sociedade Gestora de Participações Sociais", „Sociedade de Investimento
+    e Gestão") są całymi zdaniami, nie skrótami do wypisania na liście.
+    Zmierzone: sama `slowa()` dawała 2 trafienia na 16, ucinanie opisu — 15.
+
+    Reguła jest agresywna, więc pilnują jej dwie rzeczy: klucz musi wskazywać
+    DOKŁADNIE JEDEN wpis rejestru (patrz `rejestr_cmvm`), a łączenie i tak
+    idzie przez równość. Sprawdzone na całym rejestrze: 43 wpisy dają 43
+    różne klucze, czyli zero kolizji. Pułapki, które reguła przechodzi
+    poprawnie: „EDP" kontra „EDP Renewables" i „Sonae" kontra „Sonaecom".
+    """
+    return slowa(_OPIS_PT.sub("", str(nazwa or "")).strip())
+
+
+def _wersje_cmvm() -> tuple[str, dict[str, str]] | None:
+    """
+    Wersja modułu i wersje API poszczególnych wywołań.
+
+    OutSystems odrzuca żądanie, gdy któraś się nie zgadza — a odrzuca je
+    PUSTYMI DANYMI i flagą `hasApiVersionChanged`, nie błędem HTTP. Gdybyśmy
+    wpisali te żetony na sztywno, pierwszy wdrożony przez CMVM update dałby
+    ciche zero spółek przy raporcie sukcesu. Dlatego czytamy je z tych samych
+    skryptów, z których czyta je przeglądarka: w kodzie stoi jawnie
+    `controller.callDataAction("<akcja>", "<ścieżka>", "<apiVersion>", ...)`.
+    """
+    try:
+        wersja = json.loads(_pobierz_cmvm("moduleservices/moduleversioninfo"))
+        wersja = wersja["versionToken"]
+        api: dict[str, str] = {}
+        for skrypt in _SKRYPTY_CMVM:
+            tresc = _pobierz_cmvm(skrypt)
+            api.update({m.group(1): m.group(2) for m in re.finditer(
+                r'callDataAction\("[^"]+",\s*"screenservices/([^"]+)",\s*"([^"]+)"',
+                tresc)})
+    except Exception as e:  # noqa: BLE001
+        print(f"⚠️ Shorty CMVM: nie udało się odczytać wersji ({type(e).__name__}).")
+        return None
+
+    brakujace = [e for e in (_EKRAN_LISTA, _EKRAN_DETAL) if e not in api]
+    if brakujace:
+        print("⚠️ Shorty CMVM: w skryptach nie ma wersji API dla "
+              f"{len(brakujace)} wywołań — serwis przebudowano.")
+        return None
+    return wersja, api
+
+
+def _pobierz_cmvm(sciezka: str) -> str:
+    """
+    GET na serwis CMVM. Nagłówek `User-Agent` jest tu WYMAGANY.
+
+    Przed aplikacją stoi Azure Application Gateway, który żądanie bez
+    `User-Agent` odrzuca kodem 403. To nie jest zabezpieczenie przed botami
+    w rodzaju CAPTCHY (patrz nagłówek modułu o Mediolanie) — wystarczy się
+    przedstawić, żadnego wyzwania do rozwiązania nie ma.
+    """
+    req = urllib.request.Request(BAZA_CMVM + sciezka, headers={"User-Agent": UA})
+    with urllib.request.urlopen(req, timeout=60) as odp:
+        return odp.read().decode("utf-8", "replace")
+
+
+def _rpc_cmvm(ekran: str, wersja: str, api: dict[str, str],
+              zmienne: dict) -> dict | None:
+    """Jedno wywołanie RPC aplikacji. None przy każdym problemie."""
+    cialo = {
+        "versionInfo": {"moduleVersion": wersja, "apiVersion": api[ekran]},
+        "viewName": "ContentSplit.ContentSDI",
+        "screenData": {"variables": zmienne},
+    }
+    req = urllib.request.Request(
+        BAZA_CMVM + "screenservices/" + ekran,
+        data=json.dumps(cialo).encode("utf-8"),
+        headers={
+            "Content-Type": "application/json; charset=UTF-8",
+            "Accept": "application/json",
+            "User-Agent": UA,
+            "X-CSRFToken": _CSRF_ANONIM,
+            "OutSystems-locale": "pt-PT",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=45) as odp:
+            dane = json.loads(odp.read().decode("utf-8", "replace"))
+    except Exception:  # noqa: BLE001
+        return None
+
+    info = dane.get("versionInfo", {})
+    if info.get("hasApiVersionChanged") or info.get("hasModuleVersionChanged"):
+        print("⚠️ Shorty CMVM: serwis zgłasza zmianę wersji — pomijam Lizbonę.")
+        return None
+    return dane.get("data")
+
+
+def _zmienne_cmvm(**nadpisz) -> dict:
+    """Komplet zmiennych ekranu. Serwer odrzuca żądanie, gdy któregoś brak."""
+    zm = {"MaxRecords": 200, "StartIndex": 0, "Step": 0, "isin_cod": "",
+          "datapos": "", "datacom": "", "num_tit": 0, "Titular": "",
+          "Num_Ent": "", "Nome": ""}
+    zm.update(nadpisz)
+    return zm
+
+
+def rejestr_cmvm() -> dict[str, dict]:
+    """
+    Spis emitentów z jawnymi pozycjami krótkimi. Klucz = `slowa_pt(nazwa)`.
+
+    ŻADNEGO PLIKU ANI ADRESU Z DANYMI TU NIE MA. Serwis CMVM to aplikacja
+    jednostronicowa, która wszystko ciągnie własnym RPC — dlatego zamiast
+    parsować HTML, wołamy to samo co ona. Trzy rzeczy trzeba było odtworzyć
+    i każda jest jawna po stronie klienta: żeton CSRF dla niezalogowanych
+    (stała w bibliotece OutSystems), `User-Agent` (bez niego Azure zwraca 403)
+    oraz `apiVersion` czytane ze skryptów modułu.
+
+    ZWRACAMY SAM SPIS, BEZ LICZB. Procenty siedzą w osobnym wywołaniu na
+    emitenta, więc dociągamy je WYŁĄCZNIE dla spółek faktycznie dopasowanych
+    — kilkanaście zapytań zamiast czterdziestu trzech. Ta sama kolejność co
+    przy Sztokholmie: najpierw dopasuj, potem dociągaj.
+
+    Klucz prowadzący do WIĘCEJ NIŻ JEDNEGO wpisu jest odrzucany. Reguła
+    ucinania opisu prawnego jest agresywna, więc to zabezpieczenie jest tu
+    warunkiem, a nie ozdobą — bez niego dwie spółki o wspólnym członie
+    markowym po cichu dostałyby tę samą pozycję.
+    """
+    wersje = _wersje_cmvm()
+    if not wersje:
+        return {}
+    wersja, api = wersje
+
+    dane = _rpc_cmvm(_EKRAN_LISTA, wersja, api, _zmienne_cmvm())
+    if not dane:
+        print("⚠️ Shorty CMVM: nie udało się pobrać spisu emitentów.")
+        return {}
+
+    lista = dane.get("InteressesDescobertoRelevantesLst2", {}).get("List", [])
+    wg_klucza: dict[str, list[dict]] = {}
+    for wpis in lista:
+        k = slowa_pt(wpis.get("nom_ent", ""))
+        if k:
+            wg_klucza.setdefault(k, []).append(wpis)
+
+    wynik = {k: {"emi_id": str(v[0].get("emi_id", "")),
+                 "nazwa": str(v[0].get("nom_ent", "")),
+                 "wersja": wersja, "api": api}
+             for k, v in wg_klucza.items() if len(v) == 1}
+
+    odrzucone = len(wg_klucza) - len(wynik)
+    print(f"📉 Shorty CMVM: {len(wynik)} emitentów w spisie"
+          f"{f' (odrzucono {odrzucone} niejednoznacznych)' if odrzucone else ''}.")
+    return wynik
+
+
+def _pozycje_cmvm(wpis: dict) -> dict | None:
+    """Otwarte pozycje jednego emitenta. None, gdy nie ma żadnej."""
+    dane = _rpc_cmvm(_EKRAN_DETAL, wpis["wersja"], wpis["api"], _zmienne_cmvm(
+        MaxRecords=30, Num_Ent=wpis["emi_id"], Nome=wpis["nazwa"],
+        _num_EntInDataFetchStatus=1, _nomeInDataFetchStatus=1,
+        GetDescobertoRelevante={
+            "Detail": {"emi_id": "0", "des_val": "", "isin_cod": "",
+                       "instrumento": ""},
+            "DetailList": {"List": []},
+            "DataFetchStatus": 0,
+        }))
+    if not dane:
+        return None
+
+    pozycje = []
+    for p in dane.get("DetailList", {}).get("List", []):
+        procent = _procent_z_tekstu(p.get("percent"))
+        if procent is not None and procent > 0:
+            pozycje.append((str(p.get("Titular", "")).strip(), procent,
+                            str(p.get("data_pos", "")).strip()))
+    if not pozycje:
+        return None
+
+    suma = round(sum(x[1] for x in pozycje), 2)
+    if not 0 < suma <= 100:
+        return None
+    kto, ile, _ = max(pozycje, key=lambda x: x[1])
+    daty = sorted(_data_pt(x[2]) for x in pozycje if _data_pt(x[2]))
+    return {"procent": suma, "liczba": len(pozycje), "najwiekszy_kto": kto,
+            "najwiekszy_ile": ile, "data": daty[-1] if daty else ""}
+
+
+def _data_pt(tekst: str) -> str:
+    """„20/11/2024" na „2024-11-20". Pusto, gdy format inny."""
+    m = re.match(r"(\d{2})/(\d{2})/(\d{4})$", str(tekst or "").strip())
+    return f"{m.group(3)}-{m.group(2)}-{m.group(1)}" if m else ""
+
+
+def uzupelnij_pt(rows: list[dict]) -> int:
+    """Dokłada dane o shortach spółkom z Lizbony."""
+    portugalskie = [r for r in rows if str(r.get("Ticker", "")).endswith(".LS")]
+    if not portugalskie:
+        return 0
+
+    rejestr = rejestr_cmvm()
+    if not rejestr:
+        return 0
+
+    pary: dict[str, str] = {}
+    for r in portugalskie:
+        if r.get("Krótkie pozycje (%)") not in (None, "", "BRAK"):
+            continue
+        k = slowa_pt(r.get("Nazwa", ""))
+        if k and k in rejestr:
+            pary[str(r["Ticker"])] = k
+
+    szczegoly: dict[str, dict] = {}
+    for k in list(dict.fromkeys(pary.values()))[:LIMIT_CMVM_SZCZEGOLOW]:
+        dane = _pozycje_cmvm(rejestr[k])
+        if dane:
+            szczegoly[k] = dane
+        time.sleep(0.4)
+
+    uzupelnione = 0
+    for r in portugalskie:
+        dane = szczegoly.get(pary.get(str(r["Ticker"]), ""))
+        if not dane:
+            continue
+        r["Krótkie pozycje (%)"] = dane["procent"]
+        r["Short: liczba pozycji"] = dane["liczba"]
+        r["Short: największy gracz"] = (
+            f"{dane['najwiekszy_kto']} ({dane['najwiekszy_ile']}%)")
+        r["Short z dnia"] = dane["data"]
+        r["Źródło shortów"] = "CMVM — % wyemitowanego kapitału"
+        uzupelnione += 1
+
+    print(f"📉 Shorty: uzupełniono {uzupelnione} spółek z Lizbony "
+          f"(sprawdzono {len(portugalskie)}, dopasowano {len(pary)}).")
     return uzupelnione
 
 
