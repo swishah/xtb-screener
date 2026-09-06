@@ -25,6 +25,8 @@ from core.rekomendacje import rekomendacje_gpw  # noqa: E402
 from core.rekomendacje_swiat import uzupelnij as rekomendacje_swiat  # noqa: E402
 from core.rewizje import uzupelnij as rewizje_uzupelnij  # noqa: E402
 from core.rewizje import kandydaci_odniesienia, ma_dane_odniesienia  # noqa: E402
+from core import alarmy as alarmy_mod  # noqa: E402
+from core import db as db_mod  # noqa: E402
 
 
 
@@ -192,6 +194,44 @@ def _uzupelnij_rewizje(rows: list[dict]) -> None:
           f"w dół {obnizone}.")
 
 
+
+def _sprawdz_alarmy(rows: list[dict]) -> None:
+    """
+    Sprawdza alarmy cenowe użytkowników i powiadamia o wyzwolonych.
+
+    Alarm oznaczamy w bazie ZAWSZE, a powiadomienie wysyłamy tylko wtedy, gdy
+    kanał jest skonfigurowany. Dzięki temu funkcja działa od pierwszego dnia,
+    bez Discorda i bez SMTP — użytkownik zobaczy wyzwolone alarmy w aplikacji.
+    Gdyby jedynym śladem było powiadomienie, brak konfiguracji oznaczałby
+    ciche gubienie tego, na co ktoś czekał.
+    """
+    conn = db_mod.get_conn()
+    try:
+        wyzwolone = alarmy_mod.sprawdz(rows, conn)
+        if wyzwolone:
+            db_mod._zatwierdz(conn)
+    except Exception as e:  # noqa: BLE001
+        print(f"⚠️ Alarmy: sprawdzanie nie powiodło się ({type(e).__name__}) — pomijam.")
+        return
+    finally:
+        db_mod._zamknij(conn)
+
+    if not wyzwolone:
+        return
+
+    tresc = alarmy_mod.opis(wyzwolone)
+    try:
+        from core.alerts import any_channel_configured, broadcast
+        if any_channel_configured():
+            broadcast("Alarmy cenowe", tresc)
+        else:
+            print("ℹ️ Alarmy: brak skonfigurowanego kanału powiadomień — "
+                  "wyzwolone alarmy widać w aplikacji.")
+    except Exception as e:  # noqa: BLE001
+        print(f"⚠️ Alarmy: powiadomienie nie poszło ({type(e).__name__}).")
+    print(tresc)
+
+
 def main() -> None:
     today = date.today().isoformat()
     all_rows: list[dict] = []
@@ -242,6 +282,7 @@ def main() -> None:
 
     print(f"💾 Zapisuję migawkę {today}: {len(all_rows)} instrumentów.")
     save_snapshot(today, all_rows)
+    _sprawdz_alarmy(all_rows)
 
     today_df = pd.DataFrame(all_rows)
     check_top10_newcomers(STRATEGIES, today_df, prev_df)

@@ -36,6 +36,7 @@ INDICATOR_GROUPS: dict[str, list[str]] = {
     "Technika": [
         "RSI", "MACD", "SMA20", "SMA50", "SMA100", "SMA200", "bollinger_pct",
         "volume_ratio", "smc", "pct_from_ath", "ATH", "ATL", "Zmiana ceny (1Y%)",
+        "Maksimum dnia", "Minimum dnia",
     ],
     "Prognozy analityków i ryzyko": [
         "Beta", "52-tyg. maksimum", "52-tyg. minimum", "Cena docelowa (analitycy)",
@@ -201,6 +202,15 @@ INDICATOR_HELP: dict[str, str] = {
         "Niska beta, dodatnia roczna zmiana ceny i solidna dywidenda o bezpiecznym "
         "payout. Uproszczona formuła konserwatywna Blitza i van Vlieta — beta "
         "zamiast zmienności 36-miesięcznej, sama dywidenda zamiast net payout yield."
+    ),
+    "Maksimum dnia": (
+        "Najwyższa cena ostatniej sesji. Służy alarmom cenowym: dzięki niej "
+        "przebicie progu w ciągu dnia, które do zamknięcia się cofnęło, i tak "
+        "zostanie złapane."
+    ),
+    "Minimum dnia": (
+        "Najniższa cena ostatniej sesji — druga strona tego samego mechanizmu "
+        "co „Maksimum dnia”."
     ),
     "Zmiana ceny docelowej (%)": (
         "O ile zmieniła się średnia cena docelowa analityków wobec migawki sprzed "

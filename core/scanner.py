@@ -94,6 +94,28 @@ def get_current_price(tk: "yf.Ticker", df: pd.DataFrame) -> float | None:
     return None
 
 
+
+def _ekstrema_sesji(df: pd.DataFrame) -> dict:
+    """
+    Maksimum i minimum ostatniej sesji z pobranej historii.
+
+    Ostatni wiersz bywa pusty (sesja w toku, dzień bez obrotu), więc bierzemy
+    ostatnie wartości Z WARTOŚCIĄ — dokładnie tak jak przy cenie, gdzie brak
+    tego zabezpieczenia dawał kiedyś „nan" przy poprawnym instrumencie.
+    """
+    wynik = {"Maksimum dnia": "BRAK", "Minimum dnia": "BRAK"}
+    try:
+        for kolumna, klucz in (("High", "Maksimum dnia"), ("Low", "Minimum dnia")):
+            if kolumna not in df.columns:
+                continue
+            wartosci = df[kolumna].dropna()
+            if not wartosci.empty:
+                wynik[klucz] = round(float(wartosci.iloc[-1]), 2)
+    except Exception:  # noqa: BLE001
+        pass
+    return wynik
+
+
 def _safe_get(info: dict, key: str, is_pct: bool = False):
     val = info.get(key)
     if val is None or pd.isna(val):
@@ -1300,6 +1322,11 @@ def analyze_ticker(ticker: str, full_name: str, kind: str = "stock") -> dict | N
             round(info.get("ebitda") / 1e6, 1)
             if isinstance(info.get("ebitda"), (int, float)) else "BRAK"
         ),
+        # Ekstrema ostatniej sesji — potrzebne alarmom cenowym. Skan chodzi raz
+        # na dobę, więc porównywanie progu z ceną ZAMKNIĘCIA gubiłoby każde
+        # przebicie, które w ciągu dnia się cofnęło. OHLC i tak mamy pobrane,
+        # więc to nic nie kosztuje.
+        **_ekstrema_sesji(df),
     }
 
     # Zmiana ceny w ostatnim roku — kluczowe dla strategii "wysoka dywidenda,

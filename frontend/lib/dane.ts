@@ -186,6 +186,39 @@ export async function migawka(dzien?: string): Promise<Migawka> {
 }
 
 /**
+ * Ścieżka ceny jednej spółki, po jednym punkcie na migawkę.
+ *
+ * Potrzebna do wykresu, na którym przeciąga się linię alarmu. Celowo NIE
+ * pobieramy notowań z sieci: mamy własną historię z codziennych skanów,
+ * jest darmowa i rośnie z każdym dniem. Jest za to krótka — pierwsza migawka
+ * to 2026-08-08 — więc wykres pokazuje ostatnie tygodnie, a nie rok.
+ *
+ * Oś cen wykresu rozpina się i tak na zakresie 52-tygodniowym z migawki,
+ * więc krótka ścieżka nie ogranicza tego, gdzie da się postawić alarm.
+ */
+export async function historiaCeny(
+  ticker: string,
+  limit = 120,
+): Promise<{ dzien: string; cena: number }[]> {
+  const wynik = await klient().execute({
+    sql: `SELECT scan_date, payload FROM snapshots
+          WHERE ticker = ? ORDER BY scan_date DESC LIMIT ?`,
+    args: [ticker, limit],
+  });
+
+  const punkty: { dzien: string; cena: number }[] = [];
+  for (const wiersz of wynik.rows) {
+    const rekord = parsujPayload(String(wiersz.payload));
+    const cena = Number(rekord?.["Cena"]);
+    if (Number.isFinite(cena) && cena > 0) {
+      punkty.push({ dzien: String(wiersz.scan_date), cena });
+    }
+  }
+  // Zapytanie idzie od najnowszej, żeby LIMIT obcinał stare, a nie nowe.
+  return punkty.reverse();
+}
+
+/**
  * Migawka, która NIE rzuca wyjątkiem.
  *
  * Wyjątek w komponencie serwerowym kończy się stroną błędu Next.js zamiast

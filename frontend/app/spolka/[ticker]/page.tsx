@@ -3,13 +3,25 @@ import { notFound } from "next/navigation";
 import Pasek from "../../Pasek";
 import Profil from "../Profil";
 import WykresPelny from "../WykresPelny";
-import { migawkaBezpieczna } from "@/lib/dane";
+import { historiaCeny, migawkaBezpieczna } from "@/lib/dane";
 import { liczba } from "@/lib/filtry";
 import { newsySpolki } from "@/lib/newsy";
 import { symbolTradingView } from "@/lib/tradingview";
 import { wymagajZalogowania } from "@/lib/sesja";
+import { alarmySpolki } from "@/lib/alarmy";
+import UstawAlarm from "../../alarmy/UstawAlarm";
+import ListaAlarmow from "../../alarmy/Lista";
 
 export const dynamic = "force-dynamic";
+
+/** Krótkie kody z adresu na zdania — patrz uzasadnienie w akcjach logowania. */
+const KOMUNIKATY_ALARMU: Record<string, string> = {
+  dodany: "Alarm ustawiony. Sprawdzi go najbliższy skan.",
+  duplikat: "Taki alarm już istnieje — ten sam próg w tę samą stronę.",
+  limit: "Osiągnięto limit alarmów na koncie.",
+  cena: "Cena alarmu musi być liczbą większą od zera.",
+  "brak-tickera": "Nie wiadomo, której spółki dotyczy alarm.",
+};
 
 export default async function StronaSpolki({
   params,
@@ -20,7 +32,7 @@ export default async function StronaSpolki({
 }) {
   // Cała aplikacja jest za logowaniem — publiczne są tylko
   // ekrany logowania, rejestracji i resetu hasła.
-  await wymagajZalogowania();
+  const uzytkownik = await wymagajZalogowania();
 
   const { ticker } = await params;
   const q = await searchParams;
@@ -42,6 +54,12 @@ export default async function StronaSpolki({
 
   const cena = spolka ? liczba(spolka.Cena) : null;
   const zmiana = spolka ? liczba(spolka["Zmiana ceny (1Y%)"]) : null;
+
+  // Alarmy i ścieżkę ceny pobieramy tylko dla znalezionej spółki i tylko
+  // wtedy, gdy jest z czego rysować wykres.
+  const alarmy = spolka ? await alarmySpolki(uzytkownik.id, szukany) : [];
+  const punkty = spolka && cena !== null ? await historiaCeny(szukany) : [];
+  const komunikatAlarmu = Array.isArray(q.alarm) ? q.alarm[0] : q.alarm;
 
   return (
     <main className="wrap">
@@ -88,6 +106,53 @@ export default async function StronaSpolki({
               </Link>
             </div>
           </div>
+
+          <section className="card sekcja-alarmy" id="alarmy">
+            <div className="cardhead">
+              <h2>Alarm cenowy</h2>
+              <em>przeciągnij linię albo wpisz cenę</em>
+            </div>
+
+            {komunikatAlarmu && (
+              <p
+                className={
+                  komunikatAlarmu === "dodany"
+                    ? "komunikat-info"
+                    : "komunikat-blad"
+                }
+              >
+                {KOMUNIKATY_ALARMU[komunikatAlarmu] ?? "Nie udało się zapisać alarmu."}
+              </p>
+            )}
+
+            {cena !== null ? (
+              <UstawAlarm
+                ticker={String(spolka.Ticker)}
+                nazwa={String(spolka.Nazwa ?? "")}
+                cena={cena}
+                min52={liczba(spolka["52-tyg. minimum"])}
+                max52={liczba(spolka["52-tyg. maksimum"])}
+                waluta={String(spolka.Waluta ?? "")}
+                punkty={punkty}
+                progiIstniejace={alarmy
+                  .filter((a) => !a.wyzwolony)
+                  .map((a) => a.cena)}
+                powrot={`/spolka/${encodeURIComponent(String(spolka.Ticker))}`}
+              />
+            ) : (
+              <p className="pusto">
+                Bez ceny z migawki nie ma na czym postawić alarmu.
+              </p>
+            )}
+
+            {alarmy.length > 0 && (
+              <ListaAlarmow
+                alarmy={alarmy}
+                powrot={`/spolka/${encodeURIComponent(String(spolka.Ticker))}`}
+                pokazTicker={false}
+              />
+            )}
+          </section>
 
           <Profil spolka={spolka} wszystkie={instrumenty} newsy={newsy} />
         </>
