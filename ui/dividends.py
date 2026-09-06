@@ -56,6 +56,13 @@ def render_dividends():
         )
 
         candidates = stocks.copy()
+        # Wypłata JEDNORAZOWA nie należy do tego modułu: nie ma tu sezonu,
+        # na który dałoby się czekać. TransDigm wypłacił 75 i 90 USD dywidendy
+        # specjalnej i wychodziło z tego 7,74% "stopy dywidendy" przy 0%
+        # podawanych przez Yahoo. Frontend odsiewa je tak samo — oba widoki
+        # mają pokazywać to samo.
+        if "Dywidenda nieregularna" in candidates.columns:
+            candidates = candidates[candidates["Dywidenda nieregularna"] != "Tak"]
         if "Stopa Dyw. (%)" in candidates.columns:
             candidates = candidates[pd.to_numeric(candidates["Stopa Dyw. (%)"], errors="coerce") >= min_yield]
         if "Zmiana ceny (1Y%)" in candidates.columns:
@@ -77,7 +84,8 @@ def render_dividends():
         st.caption(f"Znaleziono **{len(candidates)}** spółek spełniających kryteria.")
 
         default_dividend_cols = [
-            "Rynek", "Stopa Dyw. (%)", "Dyw. w poprzednim roku", "Dyw. w tym roku",
+            "Rynek", "Stopa Dyw. (%)", "Źródło stopy dyw.",
+            "Dyw. w poprzednim roku", "Dyw. w tym roku",
             "Poprzednia dywidenda", "Przyszła dywidenda", "Zmiana ceny (1Y%)",
             "Lata z dywidendą (3Y)", "Payout ratio (%)", "C/Z (P/E)", "ROE (%)",
             "Marża Operac. (%)", "Marża netto (%)", "Wzrost przychodów (%)",
@@ -99,6 +107,10 @@ def render_dividends():
             file_name=f"dywidendy_{dates[0]}.csv",
         )
         st.caption(
+            "Stopa dywidendy pochodzi z pola 'dividendYield' Yahoo, więc uwzględnia obniżki "
+            "i pomija wypłaty jednorazowe — spółki z dywidendą specjalną są z tego zestawienia "
+            "wykluczone. Nasze wcześniejsze wyliczenie (suma za poprzedni rok kalendarzowy) "
+            "zostało w kolumnie 'Stopa dyw. z roku kal. (%)'. "
             "'Dyw. w poprzednim roku' / 'Dyw. w tym roku' pokazują, czy spółka jest jeszcze "
             "PRZED tegoroczną wypłatą (sedno tej strategii) czy już PO. Payout ratio i wzrost "
             "przychodów/marż pokazują, czy dywidenda jest bezpieczna. 'Przyszła dywidenda' "

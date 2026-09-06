@@ -32,6 +32,7 @@ INDICATOR_GROUPS: dict[str, list[str]] = {
     "Dywidendy": [
         "Stopa Dyw. (%)", "Lata z dywidendą (3Y)", "Poprzednia dywidenda", "Przyszła dywidenda",
         "Dyw. w poprzednim roku", "Dyw. w tym roku",
+        "Stopa dyw. z roku kal. (%)", "Źródło stopy dyw.", "Dywidenda nieregularna",
     ],
     "Technika": [
         "RSI", "MACD", "SMA20", "SMA50", "SMA100", "SMA200", "bollinger_pct",
@@ -154,6 +155,9 @@ INDICATOR_HELP: dict[str, str] = {
         "oczekuje cięcia dywidendy — zawsze sprawdź Payout ratio obok."
     ),
     "Lata z dywidendą (3Y)": "Ile z ostatnich 3 lat spółka wypłaciła dywidendę — 3 oznacza nieprzerwaną historię.",
+    "Stopa dyw. z roku kal. (%)": "Suma wypłat za POPRZEDNI ROK KALENDARZOWY podzielona przez dzisiejszą cenę. Tak liczyliśmy stopę do 2026-09-06; zostaje jako podgląd tego, co spółka faktycznie wypłaciła. Nie widzi obniżek z bieżącego roku i traktuje wypłatę jednorazową jak coroczną.",
+    "Źródło stopy dyw.": "Skąd pochodzi 'Stopa Dyw. (%)'. 'Yahoo' = pole dividendYield, czyli miara bieżąca, uwzględniająca obniżki i pomijająca wypłaty jednorazowe.",
+    "Dywidenda nieregularna": "'Tak' znaczy, że spółka coś wypłaciła, ale Yahoo nie uznaje tego za powtarzalną dywidendę — czyli wypłata specjalna, jednorazowa. Nie ma tu sezonu, na który dałoby się czekać.",
     "Poprzednia dywidenda": "Data ostatniej faktycznie wypłaconej dywidendy.",
     "Przyszła dywidenda": "Najbliższa zapowiedziana data — BRAK, jeśli Yahoo nie ma potwierdzonej przyszłej daty (częste poza USA).",
     "Dyw. w poprzednim roku": "Czy spółka wypłaciła dywidendę w POPRZEDNIM roku kalendarzowym.",
@@ -279,6 +283,7 @@ TEXT_COLUMNS = {
     "Ticker", "Nazwa", "Rynek", "Typ", "Sektor", "Branża", "Waluta",
     "Czerwone flagi", "Poprzednia dywidenda", "Przyszła dywidenda",
     "Dyw. w poprzednim roku", "Dyw. w tym roku",
+    "Źródło stopy dyw.", "Dywidenda nieregularna",
     "smc", "Rekomendacja analityków", "Źródło rekomendacji", "Rekomendacja z dnia",
     "Zmiana rekomendacji", "Rewizja od dnia",
     "Short: największy gracz", "Short z dnia", "Źródło shortów",

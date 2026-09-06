@@ -1268,3 +1268,25 @@ th.kol-wykres, td.kol-wykres { width: 1%; white-space: nowrap; text-align: cente
 .tab-korelacje th,
 .tab-korelacje td { white-space: nowrap; }
 .tab-korelacje td.t { position: sticky; left: 0; background: var(--surface); }
+
+/* ---------- moduł Dywidendy ---------- */
+/* Przełącznik w siatce filtrów: etykieta i pole w jednej linii, inaczej
+   checkbox wyglądałby jak sierota pod długim opisem. */
+.pole-przelacznik {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 8px;
+}
+.pole-przelacznik input { width: 16px; height: 16px; accent-color: var(--k4-fg); }
+
+.tab-dywidendy td,
+.tab-dywidendy th { white-space: nowrap; }
+/* „Nie” w kolumnie „Ten rok” to sedno strategii — wypłata dopiero przed nami,
+   więc ma się rzucać w oczy, a nie ginąć wśród innych „Nie”. */
+.przed-sezonem {
+  color: var(--k4-fg);
+  background: var(--k4-bg);
+  padding: 2px 7px;
+  border-radius: 6px;
+  font-size: 0.78rem;
+}

@@ -52,7 +52,9 @@ export const KATEGORIE: Kategoria[] = [
   {
     etykieta: "Dywidendy",
     klasa: "k4",
-    moduly: [{ nazwa: "Dywidendy", opis: "Tanio przed sezonem", sciezka: null }],
+    moduly: [
+      { nazwa: "Dywidendy", opis: "Tanio przed sezonem", sciezka: "/dywidendy" },
+    ],
   },
   {
     etykieta: "Moje",

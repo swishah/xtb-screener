@@ -15,9 +15,17 @@ export const dynamic = "force-dynamic";
 
 const LIMIT = 200;
 
-/** Liczba z adresu URL; przy śmieciach wraca wartość domyślna. */
+/**
+ * Liczba z adresu URL; przy śmieciach wraca wartość domyślna.
+ *
+ * Pusty parametr (`?maksZmiana1Y=`) MUSI być traktowany jak jego brak.
+ * `Number("")` daje w JavaScripcie 0, a nie NaN, więc pierwsza wersja
+ * przepuszczała pustkę jako twarde zero — zmierzone: `?maksZmiana1Y=`
+ * dawało 35 wyników zamiast 51 z wartości domyślnej. Formularze i ręcznie
+ * czyszczone adresy produkują takie parametry same z siebie.
+ */
 function num(wejscie: string | undefined, domyslna: number): number {
-  if (wejscie === undefined) return domyslna;
+  if (wejscie === undefined || wejscie.trim() === "") return domyslna;
   const n = Number(wejscie);
   return Number.isFinite(n) ? n : domyslna;
 }

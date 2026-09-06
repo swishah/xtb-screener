@@ -312,12 +312,37 @@ def dividend_opportunity_score(row: dict) -> int:
         pts += 1
 
     # Sezon dywidendowy: kluczowa część tej strategii.
+    #
+    # PUNKTY ZA SEZON NALEŻĄ SIĘ WYŁĄCZNIE SPÓŁCE, KTÓRA W OGÓLE PŁACI.
+    # Pierwsza wersja dawała +2 za "nie zapłaciła w tym roku" każdemu — także
+    # spółce, która nie zapłaciła nigdy. Na migawce 2026-09-04 dotyczyło to
+    # 297 spółek bez śladu dywidendy, z których każda zbierała od 2 do 6
+    # punktów w strategii DYWIDENDOWEJ. To ta sama pułapka, którą naprawiono
+    # w "Rewizjach analityków": brak zdarzenia musi znaczyć zero punktów,
+    # a nie tyle samo co zdarzenie korzystne.
+    placi = (
+        row.get("Dyw. w poprzednim roku") == "Tak"
+        or row.get("Dyw. w tym roku") == "Tak"
+        or isinstance(row.get("Stopa Dyw. (%)"), (int, float))
+    )
+    # Dywidenda JEDNORAZOWA nie tworzy sezonu, na który da się czekać —
+    # a cała ta strategia polega właśnie na czekaniu na coroczną wypłatę.
+    # Bez tego warunku TransDigm (75 i 90 USD wypłaty specjalnej) zbierał
+    # 8 z 13 punktów, mimo że regularnej dywidendy nie płaci wcale.
+    if not placi or row.get("Dywidenda nieregularna") == "Tak":
+        return 0
+
     if row.get("Dyw. w poprzednim roku") == "Tak":
         pts += 1
     if row.get("Dyw. w tym roku") == "Nie":
         pts += 2  # wypłata jeszcze przed nami w tym roku — sedno strategii
     if row.get("Przyszła dywidenda", "BRAK") != "BRAK":
-        pts += 1  # wiemy dokładnie, kiedy nastąpi wypłata
+        # UWAGA: Yahoo podaje tę datę głównie dla USA — zmierzone na migawce
+        # 2026-09-04: 58% spółek płacących z USA kontra 11% spoza USA. Ten
+        # punkt jest więc systematycznie trudniejszy do zdobycia w Europie.
+        # To nie błąd, ale realne przesunięcie rankingu — jak brak EBITDA
+        # u banków w "Wartości złożonej".
+        pts += 1
     return pts
 
 
@@ -1346,7 +1371,7 @@ def analyze_ticker(ticker: str, full_name: str, kind: str = "stock") -> dict | N
             price_change_1y = round(((price - price_1y_ago) / price_1y_ago) * 100, 1)
 
     curr_y = datetime.now().year
-    div_yield = "BRAK"
+    div_yield_kal = "BRAK"
     div_years_paid = 0
     last_div_date = "BRAK"
     div_paid_prev_year = "Nie"
@@ -1358,14 +1383,54 @@ def analyze_ticker(ticker: str, full_name: str, kind: str = "stock") -> dict | N
             last_div_date = nonzero_divs.index.max().date().isoformat()
         if not divs.empty and divs.sum() > 0:
             by_year = divs.groupby(divs.index.year).sum()
-            last_div = round(float(by_year.get(curr_y - 1, 0)), 2)
+            # Bez zaokrąglania sumy przed dzieleniem: przy dywidendzie rzędu
+            # groszy round(..., 2) zerowało ją i stopa wychodziła "BRAK".
+            last_div = float(by_year.get(curr_y - 1, 0))
             if last_div > 0 and price > 0:
-                div_yield = round((last_div / price) * 100, 2)
+                div_yield_kal = round((last_div / price) * 100, 2)
             div_years_paid = sum(
                 1 for y in (curr_y - 1, curr_y - 2, curr_y - 3) if by_year.get(y, 0) > 0
             )
             div_paid_prev_year = "Tak" if by_year.get(curr_y - 1, 0) > 0 else "Nie"
             div_paid_this_year = "Tak" if by_year.get(curr_y, 0) > 0 else "Nie"
+
+    # STOPA DYWIDENDY BIERZE SIĘ Z YAHOO, NIE Z NASZEGO SUMOWANIA — i to jest
+    # naprawa dwóch zmierzonych błędów, nie kwestia gustu:
+    #
+    # 1. WYPŁATY JEDNORAZOWE UDAWAŁY POWTARZALNE. TransDigm wypłacił 75 USD
+    #    (2024) i 90 USD (2025) jako dywidendy specjalne — u nas wychodziło
+    #    7,74% "stopy dywidendy", podczas gdy Yahoo podaje 0%, bo regularnej
+    #    dywidendy tam nie ma. Pilgrim's Pride: 27,56% u nas, 0% u Yahoo.
+    # 2. OBNIŻKI BYŁY NIEWIDOCZNE NAWET PRZEZ 20 MIESIĘCY. Whirlpool ściął
+    #    wypłatę w 2026, a my wciąż liczyliśmy z sumy za 2025: 13,49% zamiast
+    #    faktycznych 7,01%. To dokładnie ta "pułapka dywidendowa", przed
+    #    którą moduł miał ostrzegać.
+    #
+    # `dividendYield` siedzi w `info`, które skan i tak pobiera, więc nie
+    # kosztuje ani jednego zapytania więcej. Pokrycie zmierzone na 182
+    # płacących spółkach z 13 rynków: 182/182, ani jednej luki.
+    #
+    # PUŁAPKA SKALI, ZMIERZONA: `dividendYield` jest w PROCENTACH (MMM: 1.85),
+    # a `trailingAnnualDividendYield` w UŁAMKACH (MMM: 0.0179). Nie przepuszczaj
+    # tego pierwszego przez `_safe_get(..., is_pct=True)` — wyszłoby 185%.
+    # Nie "normalizuj" też wartości poniżej 1 przez mnożenie: 0,8% to po
+    # prostu niska stopa (Alcoa), a nie ułamek do przeskalowania.
+    yahoo_yield = info.get("dividendYield")
+    if isinstance(yahoo_yield, (int, float)) and yahoo_yield > 0:
+        div_yield = round(float(yahoo_yield), 2)
+        div_yield_zrodlo = "Yahoo"
+    else:
+        div_yield = "BRAK"
+        div_yield_zrodlo = "BRAK"
+
+    # Yahoo milczy, a my policzyliśmy wypłatę z zeszłego roku — na 182
+    # płacących spółkach nie zdarzyło się to ANI RAZU, więc taki układ znaczy
+    # tyle, że Yahoo nie uznaje tej wypłaty za powtarzalną. Czyli dywidenda
+    # specjalna. Nie podstawiamy jej pod stopę, ale mówimy o niej wprost.
+    div_nieregularna = (
+        "Tak" if div_yield == "BRAK" and isinstance(div_yield_kal, (int, float))
+        else "Nie"
+    )
 
     # Najbliższa (przyszła) dywidenda — Yahoo bywa niekonsekwentne: pola te
     # czasem opisują OSTATNIĄ ex-dividend date, nie przyszłą, więc uznajemy
@@ -1387,6 +1452,9 @@ def analyze_ticker(ticker: str, full_name: str, kind: str = "stock") -> dict | N
         "Waluta": currency, "Zmiana ceny (1Y%)": price_change_1y,
         "Sektor": sector, "Branża": industry,
         "Stopa Dyw. (%)": div_yield, "Lata z dywidendą (3Y)": div_years_paid,
+        "Stopa dyw. z roku kal. (%)": div_yield_kal,
+        "Źródło stopy dyw.": div_yield_zrodlo,
+        "Dywidenda nieregularna": div_nieregularna,
         "Poprzednia dywidenda": last_div_date, "Przyszła dywidenda": next_div_date,
         "Dyw. w poprzednim roku": div_paid_prev_year, "Dyw. w tym roku": div_paid_this_year,
         **fund, **extra_market_data, **ind,
