@@ -1140,3 +1140,131 @@ th.kol-wykres, td.kol-wykres { width: 1%; white-space: nowrap; text-align: cente
     width: auto;
   }
 }
+
+/* ---------- moduł Watchlist ---------- */
+/* Drobny druk: wyjaśnienia i zastrzeżenia idą pod dane, nie nad nie —
+   ekran ma pokazywać liczby, a nie akapit o metodologii. */
+.drobne {
+  margin: 10px 0 2px;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--muted);
+  max-width: 78ch;
+}
+
+.pasek-przeniesienia {
+  margin-top: 12px;
+  padding: 12px 20px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+.pasek-przeniesienia span { flex: 1 1 320px; color: var(--muted); }
+.pasek-przeniesienia button {
+  font: inherit;
+  font-weight: 600;
+  padding: 8px 14px;
+  border-radius: 10px;
+  cursor: pointer;
+  background: var(--k5-bg);
+  color: var(--k5-fg);
+  border: 1px solid transparent;
+}
+.pasek-przeniesienia button:hover { border-color: var(--k5-fg); }
+
+.form-dodaj-obserwowana {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+.form-dodaj-obserwowana label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 0.78rem;
+  color: var(--muted);
+  flex: 0 1 200px;
+}
+.form-dodaj-obserwowana label.rozciagnij { flex: 1 1 260px; }
+.form-dodaj-obserwowana input {
+  font: inherit;
+  font-size: 0.86rem;
+  padding: 8px 10px;
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--fg);
+}
+.form-dodaj-obserwowana input:focus-visible { outline: 2px solid var(--k5-fg); }
+.form-dodaj-obserwowana button {
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.86rem;
+  padding: 9px 18px;
+  border-radius: 9px;
+  cursor: pointer;
+  background: var(--k5-bg);
+  color: var(--k5-fg);
+  border: 1px solid transparent;
+}
+.form-dodaj-obserwowana button:hover { border-color: var(--k5-fg); }
+
+/* Notatka edytowana w miejscu: pole i przycisk w jednej linii, żeby wiersz
+   tabeli nie rósł na dwie wysokości. */
+.tab-watchlist td.kol-notatka { min-width: 240px; }
+.form-notatka { display: flex; gap: 6px; align-items: center; }
+.form-notatka input {
+  font: inherit;
+  font-size: 0.82rem;
+  flex: 1 1 auto;
+  min-width: 120px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--fg);
+}
+.form-notatka input:focus-visible { outline: 2px solid var(--k5-fg); }
+.form-notatka button,
+.btn-usun {
+  font: inherit;
+  font-size: 0.76rem;
+  padding: 6px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  white-space: nowrap;
+}
+.form-notatka button:hover { color: var(--fg); border-color: var(--fg); }
+.btn-usun:hover { color: var(--down); border-color: var(--down); }
+
+/* Gwiazdka na profilu spółki. Stan „obserwujesz” musi być widoczny od razu,
+   bo to jedyne potwierdzenie, że kliknięcie zadziałało. */
+.btn-obserwuj {
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 8px 14px;
+  border-radius: 10px;
+  cursor: pointer;
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--line);
+}
+.btn-obserwuj:hover { color: var(--fg); border-color: var(--fg); }
+.btn-obserwuj.wl-tak {
+  background: var(--k5-bg);
+  color: var(--k5-fg);
+  border-color: transparent;
+}
+.btn-obserwuj.wl-tak:hover { border-color: var(--k5-fg); }
+
+.tab-korelacje th,
+.tab-korelacje td { white-space: nowrap; }
+.tab-korelacje td.t { position: sticky; left: 0; background: var(--surface); }

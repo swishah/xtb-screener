@@ -9,10 +9,23 @@ import { newsySpolki } from "@/lib/newsy";
 import { symbolTradingView } from "@/lib/tradingview";
 import { wymagajZalogowania } from "@/lib/sesja";
 import { alarmySpolki } from "@/lib/alarmy";
+import { czyObserwuje } from "@/lib/obserwowane";
 import UstawAlarm from "../../alarmy/UstawAlarm";
 import ListaAlarmow from "../../alarmy/Lista";
+import { dodaj as obserwuj, usun as przestanObserwowac } from "../../watchlist/akcje";
 
 export const dynamic = "force-dynamic";
+
+/** Krótkie kody z adresu na zdania — patrz uzasadnienie w akcjach logowania. */
+/**
+ * Komunikaty watchlisty. Sukces widać po samym przycisku („★ Obserwujesz”),
+ * więc wyświetlamy wyłącznie te kody, które niosą coś nowego.
+ */
+const KOMUNIKATY_WATCHLISTY: Record<string, string> = {
+  limit: "Osiągnięto limit obserwowanych spółek na koncie.",
+  nieznany: "Nie znam takiego tickera.",
+  duplikat: "Ta spółka już jest na Twojej watchliście.",
+};
 
 /** Krótkie kody z adresu na zdania — patrz uzasadnienie w akcjach logowania. */
 const KOMUNIKATY_ALARMU: Record<string, string> = {
@@ -60,6 +73,9 @@ export default async function StronaSpolki({
   const alarmy = spolka ? await alarmySpolki(uzytkownik.id, szukany) : [];
   const punkty = spolka && cena !== null ? await historiaCeny(szukany) : [];
   const komunikatAlarmu = Array.isArray(q.alarm) ? q.alarm[0] : q.alarm;
+  const obserwowana = spolka
+    ? await czyObserwuje(uzytkownik.id, String(spolka.Ticker))
+    : false;
 
   return (
     <main className="wrap">
@@ -101,11 +117,42 @@ export default async function StronaSpolki({
               <Link className="btn-wykres-duzy" href={`?wykres=1`}>
                 Pokaż wykres
               </Link>
+              {/* Zwykły formularz z akcją serwerową — działa bez JavaScriptu,
+                  tak samo jak alarmy. Adres powrotu to ta sama strona. */}
+              <form action={obserwowana ? przestanObserwowac : obserwuj}>
+                <input
+                  type="hidden"
+                  name="ticker"
+                  value={String(spolka.Ticker)}
+                />
+                <input
+                  type="hidden"
+                  name="powrot"
+                  value={`/spolka/${encodeURIComponent(String(spolka.Ticker))}`}
+                />
+                <button
+                  type="submit"
+                  className={obserwowana ? "btn-obserwuj wl-tak" : "btn-obserwuj"}
+                  title={
+                    obserwowana
+                      ? "Usuń z watchlisty"
+                      : "Dodaj do watchlisty"
+                  }
+                >
+                  {obserwowana ? "★ Obserwujesz" : "☆ Obserwuj"}
+                </button>
+              </form>
               <Link className="link" href="/screener">
                 ← Wróć do screenera
               </Link>
             </div>
           </div>
+
+          {(() => {
+            const kod = Array.isArray(q.wl) ? q.wl[0] : q.wl;
+            const tresc = kod ? KOMUNIKATY_WATCHLISTY[kod] : null;
+            return tresc ? <p className="komunikat-blad">{tresc}</p> : null;
+          })()}
 
           <section className="card sekcja-alarmy" id="alarmy">
             <div className="cardhead">

@@ -59,7 +59,7 @@ export const KATEGORIE: Kategoria[] = [
     klasa: "k5",
     moduly: [
       { nazwa: "Alarmy cenowe", opis: "Progi na wykresie", sciezka: "/alarmy" },
-      { nazwa: "Watchlist", opis: "Obserwowane z notatkami", sciezka: null },
+      { nazwa: "Watchlist", opis: "Obserwowane z notatkami", sciezka: "/watchlist" },
       { nazwa: "Analiza transakcji", opis: "Import z XTB", sciezka: null },
       { nazwa: "Własne instrumenty", opis: "Ręcznie dodane tickery", sciezka: null },
     ],
