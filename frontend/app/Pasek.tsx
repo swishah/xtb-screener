@@ -37,6 +37,12 @@ export default function Pasek({
         <h1 className="brand">XTB Screener</h1>
         <span className="stamp">{dataMigawki}</span>
         <div className="tools">
+          <a className="ikona" href="/konto" title="Konto" aria-label="Konto">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="8" r="4" />
+              <path d="M4 21c0-4 3.6-6 8-6s8 2 8 6" />
+            </svg>
+          </a>
           <button
             className="icobtn"
             onClick={przelaczMotyw}

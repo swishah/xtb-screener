@@ -63,6 +63,41 @@ function klient(): Client {
   return klientCache;
 }
 
+let klientZapisuCache: Client | null = null;
+
+/**
+ * Klient Z PRAWEM ZAPISU — osobny od tego wyżej i celowo.
+ *
+ * Migawki czytamy tokenem TYLKO DO ODCZYTU: to najcenniejsze dane
+ * w projekcie i nic w aplikacji nie ma powodu ich dotykać. Konta, sesje
+ * i alarmy to co innego — tu zapis jest sensem istnienia. Rozdzielenie nie
+ * daje twardej izolacji (oba tokeny leżą w tym samym środowisku), ale
+ * wymusza jawność: jeśli moduł sięga po `klientZapisu`, to widać, że pisze.
+ *
+ * W trybie lokalnym (plik) nie ma tokenów, więc jeden klient robi obie rzeczy.
+ */
+export function klientZapisu(): Client {
+  if (klientZapisuCache) return klientZapisuCache;
+
+  const url = process.env.TURSO_DATABASE_URL;
+  if (!url) {
+    klientZapisuCache = klient();
+    return klientZapisuCache;
+  }
+
+  const token = process.env.TURSO_AUTH_TOKEN_ZAPIS;
+  if (!token) {
+    throw new Error(
+      "Brak zmiennej TURSO_AUTH_TOKEN_ZAPIS. Konta i alarmy wymagają tokenu " +
+        "z prawem zapisu — token do odczytu (TURSO_AUTH_TOKEN) obsługuje tylko " +
+        "migawki. Wygeneruj drugi token w Turso i dodaj go w ustawieniach " +
+        "wdrożenia.",
+    );
+  }
+  klientZapisuCache = createClient({ url, authToken: token });
+  return klientZapisuCache;
+}
+
 /**
  * Gołe NaN / Infinity w pozycji WARTOŚCI — czyli po dwukropku, przecinku albo
  * otwarciu tablicy. Lookbehind i lookahead pilnują, żeby nie ruszyć tekstu

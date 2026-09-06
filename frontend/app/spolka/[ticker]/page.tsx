@@ -7,6 +7,7 @@ import { migawkaBezpieczna } from "@/lib/dane";
 import { liczba } from "@/lib/filtry";
 import { newsySpolki } from "@/lib/newsy";
 import { symbolTradingView } from "@/lib/tradingview";
+import { wymagajZalogowania } from "@/lib/sesja";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,10 @@ export default async function StronaSpolki({
   params: Promise<{ ticker: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  // Cała aplikacja jest za logowaniem — publiczne są tylko
+  // ekrany logowania, rejestracji i resetu hasła.
+  await wymagajZalogowania();
+
   const { ticker } = await params;
   const q = await searchParams;
   const pokazWykres = (Array.isArray(q.wykres) ? q.wykres[0] : q.wykres) === "1";

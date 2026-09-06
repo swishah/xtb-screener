@@ -9,6 +9,7 @@ import { migawkaBezpieczna } from "@/lib/dane";
 import { newsySpolki } from "@/lib/newsy";
 import { symbolTradingView } from "@/lib/tradingview";
 import { FILTRY_DOMYSLNE, filtruj, wartosci, type Filtry } from "@/lib/filtry";
+import { wymagajZalogowania } from "@/lib/sesja";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +27,10 @@ export default async function Screener({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  // Cała aplikacja jest za logowaniem — publiczne są tylko
+  // ekrany logowania, rejestracji i resetu hasła.
+  await wymagajZalogowania();
+
   const q = await searchParams;
   const jeden = (k: string) => {
     const v = q[k];

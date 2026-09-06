@@ -4,6 +4,7 @@ import Tabela from "./Tabela";
 import { KATEGORIE } from "./moduly";
 import { migawkaBezpieczna } from "@/lib/dane";
 import { najlepsze, statystyki } from "@/lib/filtry";
+import { wymagajZalogowania } from "@/lib/sesja";
 
 // Renderowanie na żądanie: strona ma pokazywać stan bazy, a nie zamrożoną
 // wersję z chwili budowania. Powtarzalny koszt odczytu zdejmuje bufor
@@ -12,6 +13,10 @@ import { najlepsze, statystyki } from "@/lib/filtry";
 export const dynamic = "force-dynamic";
 
 export default async function Pulpit() {
+  // Cała aplikacja jest za logowaniem — publiczne są tylko
+  // ekrany logowania, rejestracji i resetu hasła.
+  await wymagajZalogowania();
+
   const { data, tryb, instrumenty, blad } = await migawkaBezpieczna();
   const s = statystyki(instrumenty);
   const top = najlepsze(instrumenty, 8);

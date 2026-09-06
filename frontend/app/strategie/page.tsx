@@ -17,6 +17,7 @@ import {
   type Filtry,
 } from "@/lib/filtry";
 import { STRATEGIE, znajdzStrategie } from "@/lib/strategie";
+import { wymagajZalogowania } from "@/lib/sesja";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +35,10 @@ export default async function Strategie({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  // Cała aplikacja jest za logowaniem — publiczne są tylko
+  // ekrany logowania, rejestracji i resetu hasła.
+  await wymagajZalogowania();
+
   const q = await searchParams;
   const jeden = (k: string) => {
     const v = q[k];

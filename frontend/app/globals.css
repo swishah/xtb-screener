@@ -668,3 +668,122 @@ th.kol-wykres, td.kol-wykres { width: 1%; white-space: nowrap; text-align: cente
   outline-offset: 2px;
   border-radius: 3px;
 }
+
+/* --- ekrany logowania, rejestracji i resetu hasła ------------------------ */
+.wrap-logowanie {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 18px;
+}
+.karta-logowania {
+  width: 100%;
+  max-width: 380px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 28px 26px 22px;
+  box-shadow: var(--lift);
+}
+.karta-logowania h1 {
+  margin: 0;
+  font-size: 1.3rem;
+  letter-spacing: -0.02em;
+}
+.karta-logowania .podtytul {
+  margin: 6px 0 20px;
+  color: var(--muted);
+  font-size: 0.87rem;
+  line-height: 1.5;
+}
+.karta-logowania form,
+.formularz-konta {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.karta-logowania label,
+.formularz-konta label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.karta-logowania input,
+.formularz-konta input {
+  font: inherit;
+  font-size: 0.95rem;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 10px 12px;
+}
+.karta-logowania input:focus-visible,
+.formularz-konta input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.karta-logowania button,
+.formularz-konta button {
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.92rem;
+  color: var(--on-accent);
+  background: var(--accent);
+  border: none;
+  border-radius: 9px;
+  padding: 11px 14px;
+  cursor: pointer;
+  margin-top: 4px;
+}
+.karta-logowania button:hover,
+.formularz-konta button:hover {
+  filter: brightness(1.08);
+}
+.btn-wtorny {
+  color: var(--fg) !important;
+  background: var(--pill-bg) !important;
+}
+.komunikat-blad,
+.komunikat-info {
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  border-radius: 9px;
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+.komunikat-blad {
+  color: var(--down);
+  background: rgba(192, 57, 46, 0.1);
+}
+.komunikat-info {
+  color: var(--good-fg);
+  background: var(--good-bg);
+}
+.pod-formularzem {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+  font-size: 0.83rem;
+}
+.pod-formularzem a {
+  color: var(--muted);
+  text-decoration: none;
+}
+.pod-formularzem a:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+.karta-logowania code {
+  font-family: var(--mono);
+  font-size: 0.85em;
+  background: var(--pill-bg);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
