@@ -128,6 +128,7 @@ function KrotkiePozycje({ spolka }: { spolka: Instrument }) {
     PA: "otwarte dane francuskiego nadzoru (AMF)",
     MC: "rejestr hiszpańskiego nadzoru (CNMV)",
     ST: "rejestr szwedzkiego nadzoru (Finansinspektionen)",
+    OL: "rejestr norweskiego nadzoru (Finanstilsynet)",
   };
   const zrodloRynku = sufiks === "" ? "dane Yahoo dla USA" : NADZOR[sufiks];
   const sprawdzany = Boolean(zrodloRynku);
@@ -146,8 +147,9 @@ function KrotkiePozycje({ spolka }: { spolka: Instrument }) {
             <b>Tego rynku nie sprawdzamy.</b> Krótkie pozycje w Europie
             publikują krajowe nadzory, każdy w innym formacie; na razie
             zaczytujemy rejestry brytyjski (FCA), polski (KNF), niemiecki
-            (Bundesanzeiger), francuski (AMF), hiszpański (CNMV) i szwedzki
-            (Finansinspektionen), a dla USA dane z Yahoo. Puste miejsce NIE znaczy, że nikt nie gra na spadek tej
+            (Bundesanzeiger), francuski (AMF), hiszpański (CNMV), szwedzki
+            (Finansinspektionen) i norweski (Finanstilsynet), a dla USA dane
+            z Yahoo. Puste miejsce NIE znaczy, że nikt nie gra na spadek tej
             spółki — znaczy, że nie mamy tu źródła.
           </>
         )}
@@ -163,6 +165,7 @@ function KrotkiePozycje({ spolka }: { spolka: Instrument }) {
     AMF: "rejestr AMF",
     CNMV: "rejestr CNMV",
     FI: "rejestr Finansinspektionen",
+    SSR: "rejestr Finanstilsynet",
   };
   const nazwaRejestru = Object.entries(REJESTRY).find(([k]) =>
     zrodlo.startsWith(k),

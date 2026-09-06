@@ -26,7 +26,11 @@ sprzedaży pozycje powyżej progu są JAWNE i publikowane przez nadzory.
      a szczegóły (kto i ile) siedzą na podstronach — dociągamy je WYŁĄCZNIE
      dla spółek, które faktycznie dopasowaliśmy, więc kilkanaście zapytań,
      nie trzysta.
-  7. **Paryż — AMF przez data.gouv.fr.** Najczystsze źródło w zestawie:
+  7. **Oslo — Finanstilsynet (ssr.finanstilsynet.no).** Jedyny rejestr
+     z prawdziwym API JSON: jedno zapytanie daje całą giełdę, bez sesji,
+     bez pliku i bez udawania przeglądarki. Podaje też ISIN, którego my
+     nie mamy — patrz niżej.
+  8. **Paryż — AMF przez data.gouv.fr.** Najczystsze źródło w zestawie:
      oficjalne otwarte dane na Licencji Otwartej 2.0, aktualizowane codziennie,
      wprost przeznaczone do przetwarzania automatycznego. Żadnych wątpliwości
      co do dozwolonego użycia.
@@ -38,8 +42,8 @@ się różnić kilkukrotnie. Dlatego zapisujemy źródło osobno i profil spół
 mówi wprost, co jest czym. **Nie sklejaj tych wartości w jedną kolumnę bez
 źródła.**
 
-CZEGO NIE MA. Oslo, Wiedeń i Lizbona mają własne rejestry u własnych
-nadzorów, każdy w innym formacie — osobna praca na każdy kraj, NIE zrobiona. **Mediolan jest zablokowany świadomie:** CONSOB odsiewa
+CZEGO NIE MA. Wiedeń i Lizbona mają własne rejestry u własnych nadzorów,
+każdy w innym formacie — osobna praca na każdy kraj, NIE zrobiona. **Mediolan jest zablokowany świadomie:** CONSOB odsiewa
 klienty niebędące przeglądarką stroną CAPTCHA (Radware), a obchodzenia
 zabezpieczeń przed botami nie robimy. Ich plik jest zresztą wzorowy —
 gdyby CONSOB udostępnił dostęp programistyczny (adres kontaktowy:
@@ -918,10 +922,28 @@ _FORMY_SE = re.compile(r"\b(ab|publ|aktiebolaget|aktiebolag|asa|oyj|abp)\b", re.
 # ma być, bo short dotyczy kapitału spółki, nie konkretnej serii.
 _KLASA_AKCJI = re.compile(r"\s+[abc]$", re.I)
 
+# Litery nordyckie NIE są ogonkami — „ø" to osobna litera, a nie „o" z kreską,
+# więc rozkład Unicode ich nie tknie i wspólna tablica `_ZNAKI` też nie.
+# Bez tego `slowa()` po prostu je WYRZUCA i „Vår Energi" robi się „v r energi",
+# czyli jedno słowo rozpada się na dwa. Dopasowanie i tak działa, bo obie
+# strony psują się tak samo — ale dwa różne słowa mogą wtedy zejść się do
+# jednego klucza. Zmierzone: transliteracja nie zmienia liczby trafień
+# (Oslo 16/21, Sztokholm 21/28) ani liczby wpisów w rejestrach.
+_NORDYCKIE = str.maketrans({
+    "ø": "o", "Ø": "o", "æ": "ae", "Æ": "ae", "å": "a", "Å": "a",
+    "ð": "d", "Ð": "d", "đ": "d", "þ": "th", "Þ": "th",
+})
+
 
 def slowa_se(nazwa: str) -> str:
-    """Normalizacja dla rynku szwedzkiego: klasa akcji i formy prawne precz."""
-    t = _KLASA_AKCJI.sub("", str(nazwa or "").strip())
+    """
+    Normalizacja dla rynków nordyckich: Sztokholm i Oslo.
+
+    Osobna od wspólnej `slowa()`, żeby nordyckie formy prawne i klasy akcji
+    nie ruszały pozostałych rynków.
+    """
+    t = str(nazwa or "").translate(_NORDYCKIE).strip()
+    t = _KLASA_AKCJI.sub("", t)
     return slowa(_FORMY_SE.sub(" ", t))
 
 
@@ -1067,6 +1089,119 @@ def uzupelnij_se(rows: list[dict]) -> int:
 
     print(f"📉 Shorty: uzupełniono {uzupelnione} spółek ze Sztokholmu "
           f"(sprawdzono {len(szwedzkie)}, szczegóły dla {len(szczegoly)}).")
+    return uzupelnione
+
+
+# ---------------------------------------------------------------------------
+# Oslo — Finanstilsynet (Short Sale Register)
+# ---------------------------------------------------------------------------
+
+# Strona rejestru rysuje tabelę z tego samego adresu. Pusty `query` znaczy
+# „wszyscy emitenci" — jedno zapytanie na całą giełdę.
+API_SSR = "https://ssr.finanstilsynet.no/api/issuers/homepageissuers?query="
+
+
+def rejestr_ssr(api: str = API_SSR) -> dict[str, dict]:
+    """
+    Otwarte pozycje krótkie z norweskiego rejestru. Klucz = `slowa_se(nazwa)`.
+
+    NAJCZYSTSZE ŹRÓDŁO PO AMF: zwykły JSON, bez sesji, bez pliku, bez
+    ciasteczek. Sprawdzone, że odpowiada 200 także na żądanie BEZ nagłówka
+    `User-Agent` — nie ma tu żadnego odsiewania klientów, więc niczego nie
+    obchodzimy (inaczej niż CONSOB, patrz nagłówek modułu).
+
+    DWIE RZECZY, KTÓRYCH TU CELOWO NIE ROBIMY:
+
+    1. **Nie pobieramy podstron `/Home/Details/<ISIN>`** z rozpisaniem, kto
+       i ile trzyma. Dokładnie ten adres jest w `robots.txt` pod `Disallow`.
+       Skutkiem jest brak kolumn „liczba pozycji" i „największy gracz" dla
+       Oslo — świadoma cena za trzymanie się reguł serwisu, nie brak danych.
+    2. **Nie bierzemy ISIN-a do dopasowania.** Rejestr go podaje, ale my nie
+       mamy ISIN-ów dla naszych tickerów (`yfinance.isin` odrzucone — patrz
+       nagłówek modułu), więc nie ma czego z czym łączyć. Gdyby kiedyś się
+       pojawiły, Oslo jest rynkiem, na którym zadziała to od ręki.
+
+    ZERO ZNACZY BRAK POZYCJI, NIE BRAK DANYCH. Rejestr wymienia emitentów
+    z HISTORIĄ zgłoszeń i pokazuje ich AKTUALNĄ sumę, więc pozycje pozamykane
+    zostają w wykazie z wartością 0,00%. Zmierzone: 146 wpisów ze 183 ma
+    dokładnie zero. Traktujemy je jak każdy inny brak — spółka zostaje bez
+    danych, tak samo jak na pozostałych rynkach. Zapisanie „0,0%" sugerowałoby
+    pomiar tam, gdzie po prostu nikt nie przekroczył progu jawności.
+
+    KOLEJNOŚĆ MA ZNACZENIE: zera odsiewamy PRZED zbudowaniem klucza. 22 nazwy
+    ze 183 występują w rejestrze dwa razy — ten sam emitent pod starym i nowym
+    ISIN-em (Tomra, Borr Drilling, Nordic Mining...), bo zmiana ISIN-u zakłada
+    nowy wpis zamiast zaktualizować stary. Stary wpis ZAWSZE ma 0,00% i datę
+    sprzed lat. Przy odwróconej kolejności stary nadpisywałby nowy i Tomra
+    wyszłaby jako spółka bez shortów zamiast 2,88%. Sprawdzone: żadna nazwa
+    nie ma dwóch wpisów z otwartą pozycją, więc odsianie zer rozstrzyga
+    wszystkie duplikaty jednoznacznie.
+    """
+    try:
+        with urllib.request.urlopen(api, timeout=60) as odp:
+            dane = json.loads(odp.read().decode("utf-8", "replace"))
+    except Exception as e:  # noqa: BLE001
+        print(f"⚠️ Shorty SSR: nie udało się pobrać rejestru ({type(e).__name__}).")
+        return {}
+
+    if not isinstance(dane, list):
+        print("⚠️ Shorty SSR: odpowiedź nie jest listą — API się zmieniło.")
+        return {}
+
+    wynik: dict[str, dict] = {}
+    for wpis in dane:
+        if not isinstance(wpis, dict):
+            continue
+        procent = _liczba(wpis.get("shortPercent"))
+        if procent is None or procent <= 0 or procent > 100:
+            continue
+        k = slowa_se(wpis.get("name", ""))
+        if not k:
+            continue
+        wynik[k] = {
+            "procent": round(procent, 2),
+            "liczba": None,           # podstrony emitentów są pod Disallow
+            "najwiekszy_kto": "",
+            "najwiekszy_ile": None,
+            "data": str(wpis.get("lastChange") or "")[:10],
+        }
+
+    print(f"📉 Shorty SSR: {len(wynik)} emitentów z otwartą pozycją krótką.")
+    return wynik
+
+
+def uzupelnij_no(rows: list[dict]) -> int:
+    """
+    Dokłada dane o shortach spółkom z Oslo.
+
+    Dopasowanie przez `slowa_se`, czyli tę samą regułę równości co wszędzie.
+    Równość odsiewa tu dwie prawdziwe pułapki: **Aker** (w rejestrze są Aker
+    Solutions, Aker BP i Aker Horizons — trzy inne spółki) oraz **Kongsberg
+    Gruppen** (w rejestrze Kongsberg Maritime i Kongsberg Automotive). Obie
+    zostają bez danych i tak ma być.
+    """
+    norweskie = [r for r in rows if str(r.get("Ticker", "")).endswith(".OL")]
+    if not norweskie:
+        return 0
+
+    rejestr = rejestr_ssr()
+    if not rejestr:
+        return 0
+
+    uzupelnione = 0
+    for r in norweskie:
+        if r.get("Krótkie pozycje (%)") not in (None, "", "BRAK"):
+            continue
+        dane = rejestr.get(slowa_se(r.get("Nazwa", "")))
+        if not dane:
+            continue
+        r["Krótkie pozycje (%)"] = dane["procent"]
+        r["Short z dnia"] = dane["data"]
+        r["Źródło shortów"] = "SSR — % wyemitowanego kapitału"
+        uzupelnione += 1
+
+    print(f"📉 Shorty: uzupełniono {uzupelnione} spółek z Oslo "
+          f"(sprawdzono {len(norweskie)}).")
     return uzupelnione
 
 

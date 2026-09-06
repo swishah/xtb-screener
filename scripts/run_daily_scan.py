@@ -240,7 +240,8 @@ def _uzupelnij_shorty(rows: list[dict]) -> None:
 
     Dane dla USA są już w wierszach — biorą się z `info` podczas skanowania.
     Tutaj dochodzi Europa: Londyn (FCA), Warszawa (KNF), Frankfurt
-    (Bundesanzeiger), Paryż (AMF), Madryt (CNMV) i Sztokholm (FI).
+    (Bundesanzeiger), Paryż (AMF), Madryt (CNMV), Sztokholm (FI)
+    i Oslo (SSR).
     Pozostałe rynki
     mają własne rejestry u własnych nadzorów i to osobna praca na każdy kraj.
     """
@@ -249,7 +250,8 @@ def _uzupelnij_shorty(rows: list[dict]) -> None:
                            ("Bundesanzeiger", shorty_mod.uzupelnij_de),
                            ("AMF", shorty_mod.uzupelnij_fr),
                            ("CNMV", shorty_mod.uzupelnij_es),
-                           ("FI", shorty_mod.uzupelnij_se)):
+                           ("FI", shorty_mod.uzupelnij_se),
+                           ("SSR", shorty_mod.uzupelnij_no)):
         # Każdy rejestr w osobnym try: padnięcie jednego nie może zabrać
         # danych z drugiego ani przerwać skanu.
         try:
