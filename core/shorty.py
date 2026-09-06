@@ -19,7 +19,9 @@ sprzedaży pozycje powyżej progu są JAWNE i publikowane przez nadzory.
   4. **Frankfurt — Bundesanzeiger.** Gotowy eksport CSV całej listy, ale za
      sesją: najpierw trzeba wejść na stronę po ciasteczko, bo adres pliku
      zawiera identyfikator stanu strony. Próg też 0,5%.
-  5. **Paryż — AMF przez data.gouv.fr.** Najczystsze źródło w zestawie:
+  5. **Madryt — CNMV.** Osobny arkusz z pozycjami otwartymi, ale plik jest
+     w STARYM formacie XLS (OLE2) — stąd jedyna w projekcie zależność `xlrd`.
+  6. **Paryż — AMF przez data.gouv.fr.** Najczystsze źródło w zestawie:
      oficjalne otwarte dane na Licencji Otwartej 2.0, aktualizowane codziennie,
      wprost przeznaczone do przetwarzania automatycznego. Żadnych wątpliwości
      co do dozwolonego użycia.
@@ -31,10 +33,13 @@ się różnić kilkukrotnie. Dlatego zapisujemy źródło osobno i profil spół
 mówi wprost, co jest czym. **Nie sklejaj tych wartości w jedną kolumnę bez
 źródła.**
 
-CZEGO NIE MA. Pozostałe rynki europejskie (Mediolan, Madryt, Sztokholm,
-Oslo, Wiedeń, Lizbona) mają własne rejestry u własnych nadzorów — CONSOB,
-CNMV i tak dalej — każdy w innym formacie. To osobna praca na każdy kraj
-i NIE jest zrobiona.
+CZEGO NIE MA. Sztokholm, Oslo, Wiedeń i Lizbona mają własne rejestry
+u własnych nadzorów, każdy w innym formacie — osobna praca na każdy kraj,
+NIE zrobiona. **Mediolan jest zablokowany świadomie:** CONSOB odsiewa
+klienty niebędące przeglądarką stroną CAPTCHA (Radware), a obchodzenia
+zabezpieczeń przed botami nie robimy. Ich plik jest zresztą wzorowy —
+gdyby CONSOB udostępnił dostęp programistyczny (adres kontaktowy:
+shortselling-service@consob.it), dopisanie Mediolanu to kwadrans.
 Brak danych o shortach dla tych rynków nie znaczy „brak shortów", tylko
 „nie sprawdzamy". Profil spółki mówi to wprost, żeby nikt nie wziął pustego
 pola za zielone światło.
@@ -97,6 +102,108 @@ def _liczba(wartosc):
     except (TypeError, ValueError):
         return None
     return None if f != f else f
+
+
+# ---------------------------------------------------------------------------
+# Wspólne dopasowanie nazw (Frankfurt, Paryż, Madryt)
+# ---------------------------------------------------------------------------
+
+# Formy prawne i spójniki, które nie niosą tożsamości spółki.
+_FORMY = re.compile(
+    r"\b(sa|sas|spa|se|ag|nv|plc|ltd|limited|inc|corp|corporation|gmbh|kgaa|"
+    r"kg|srl|sl|slu|sau|sapa|scpa|aktiengesellschaft|company|co|the|group|"
+    r"grupo|gruppo|groupe|holding|holdings|corporacion|corporation|and|y|"
+    r"et|de|des|du|s|a)\b",
+    re.I,
+)
+_ZNAKI = str.maketrans(
+    "áàâäéèêëíìîïóòôöúùûüñçłąęśżźćı",
+    "aaaaeeeeiiiioooouuuunclaeszzci",
+)
+
+
+def slowa(nazwa: str) -> str:
+    """
+    Znormalizowana nazwa Z ODSTĘPAMI — inaczej niż `klucz_*`, które je usuwają.
+
+    Odstępy są tu potrzebne, bo dopasowanie działa na CAŁYCH SŁOWACH.
+    Bez nich „bayer" pasowałoby do „bayerischemotorenwerke".
+    """
+    t = str(nazwa or "").lower().translate(_ZNAKI).replace("&", " and ")
+    t = re.sub(r"[^a-z0-9 ]", " ", t)
+    t = _FORMY.sub(" ", t)
+    return re.sub(r"\s+", " ", t).strip()
+
+
+def dopasuj_po_nazwach(
+    nasze: list[tuple[str, str]], rejestr: dict[str, dict]
+) -> dict[str, str]:
+    """
+    Łączy nasze spółki z wpisami rejestru. Zwraca {ticker: klucz_rejestru}.
+
+    ŁĄCZYMY WYŁĄCZNIE PRZEZ RÓWNOŚĆ znormalizowanych nazw. To wynik trzech
+    kolejnych prób, z których każda przypisała komuś cudzą pozycję:
+
+    1. Zwykłe „czy jedna nazwa zawiera drugą" dawało: Bayer → Bayerische
+       Motoren Werke (czyli BMW), Infineon → E.ON („eon" siedzi w „infineon"),
+       RWE → Friedrich Vorwerk, Continental → InterContinental Hotels.
+    2. Wymóg granic słów odsiał tamte cztery, ale wpuścił **Fresenius SE →
+       Fresenius Medical Care**. To dwie różne spółki dzielące markę,
+       a strukturalnie „fresenius medical care" wygląda dokładnie tak samo
+       jak „amadeus it" — nazwa nasza plus dodatkowe słowa. Z samych nazw
+       nie da się ich rozróżnić.
+    3. Wzajemna jednoznaczność (jeden wpis ↔ jedna nasza spółka) pomaga tam,
+       gdzie obie strony są w naszym uniwersum (Société Générale kontra
+       Michelin), ale nie ratuje przypadku Fresenius, bo Fresenius Medical
+       Care u nas nie występuje.
+
+    CENA: tracimy trafienia, które człowiek uznałby za oczywiste — Amadeus IT
+    Group, Cellnex Telecom, Laboratorios Rovi, Meliá Hotels International,
+    Michelin pod pełną nazwą. To około jednej trzeciej możliwych dopasowań.
+    Świadomie, bo **przypisanie cudzego shortu jest gorsze niż jego brak**:
+    puste pole użytkownik przeczyta jako „nie wiadomo", a błędne 1,44% jako
+    fakt o swojej spółce.
+
+    Gdyby kiedyś udało się zdobyć ISIN-y dla naszych tickerów, dopasowanie
+    stanie się jednoznaczne i cały ten problem znika. `yfinance.isin` do tego
+    NIE nadaje się — patrz nagłówek modułu.
+    """
+    wynik: dict[str, str] = {}
+    for ticker, nazwa in nasze:
+        k = slowa(nazwa)
+        if k and k in rejestr:
+            wynik[ticker] = k
+    return wynik
+
+
+def _uzupelnij_z_rejestru(
+    rows: list[dict], sufiks: str, rejestr: dict[str, dict], zrodlo: str,
+) -> int:
+    """Wspólny zapis danych do wierszy — identyczny dla każdego rejestru."""
+    nasze = [r for r in rows if str(r.get("Ticker", "")).endswith(sufiks)]
+    if not nasze or not rejestr:
+        return 0
+
+    pary = dopasuj_po_nazwach(
+        [(str(r["Ticker"]), str(r.get("Nazwa", ""))) for r in nasze], rejestr
+    )
+    uzupelnione = 0
+    for r in nasze:
+        if r.get("Krótkie pozycje (%)") not in (None, "", "BRAK"):
+            continue
+        klucz_rejestru = pary.get(str(r["Ticker"]))
+        if not klucz_rejestru:
+            continue
+        dane = rejestr[klucz_rejestru]
+        r["Krótkie pozycje (%)"] = dane["procent"]
+        r["Short: liczba pozycji"] = dane["liczba"]
+        r["Short: największy gracz"] = (
+            f"{dane['najwiekszy_kto']} ({dane['najwiekszy_ile']}%)"
+        )
+        r["Short z dnia"] = dane["data"]
+        r["Źródło shortów"] = zrodlo
+        uzupelnione += 1
+    return uzupelnione
 
 
 # ---------------------------------------------------------------------------
@@ -475,17 +582,6 @@ _SZUM_DE = re.compile(
 _UMLAUTY = (("ä", "ae"), ("ö", "oe"), ("ü", "ue"), ("ß", "ss"))
 
 
-def klucz_de(nazwa: str) -> str:
-    """Nazwa bez odstępów, umlautów i form prawnych."""
-    t = str(nazwa or "").lower()
-    for a, b in _UMLAUTY:
-        t = t.replace(a, b)
-    t = t.replace("&", " and ")
-    t = re.sub(r"[^a-z0-9 ]", " ", t)
-    t = _SZUM_DE.sub(" ", t)
-    return re.sub(r"\s+", "", t)
-
-
 def rejestr_bundesanzeiger(adres: str = ADRES_BUNDESANZEIGER) -> dict[str, dict]:
     """
     Aktualne pozycje krótkie z Bundesanzeigera, kluczowane skrótem nazwy.
@@ -536,7 +632,7 @@ def rejestr_bundesanzeiger(adres: str = ADRES_BUNDESANZEIGER) -> dict[str, dict]
 
     wynik: dict[str, dict] = {}
     for emitent, pozycje in wg_emitenta.items():
-        k = klucz_de(emitent)
+        k = slowa(emitent)
         if not k:
             continue
         najwiekszy = max(pozycje, key=lambda x: x[1])
@@ -557,9 +653,9 @@ def uzupelnij_de(rows: list[dict]) -> int:
     """
     Dokłada dane o shortach spółkom z Frankfurtu.
 
-    DOPASOWUJEMY WYŁĄCZNIE PRZEZ RÓWNOŚĆ NAZW i to jest wynik pomiaru, nie
-    ostrożność na wyrost. Luźniejsze reguły, które sprawdziły się przy GPW
-    (zawieranie, wspólny prefiks), na niemieckich nazwach dają same pomyłki:
+    Dopasowanie robi wspólne `dopasuj_po_nazwach()`. Niemieckie nazwy to
+    właśnie ten materiał, na którym powstała reguła całych słów — zwykłe
+    „czy jedna zawiera drugą" dawało tu same pomyłki:
 
         Bayer       ~ Bayerische Motoren Werke   (czyli BMW)
         Infineon    ~ E.ON                       ("eon" siedzi w "infineon")
@@ -567,39 +663,19 @@ def uzupelnij_de(rows: list[dict]) -> int:
         Continental ~ InterContinental Hotels
         Fresenius   ~ Fresenius Medical Care     (inna spółka!)
 
-    Sprawdzone na 59 spółkach: sama równość daje 13 trafień i ZERO pomyłek,
-    luźniejsze reguły dorzucają siedem kandydatów i wszyscy są błędni.
-    Świadomie tracimy Porsche Automobil Holding (w rejestrze pod pełną nazwą)
-    — lepiej nie pokazać nic, niż przypisać komuś cudzą pozycję.
-    **Nie luzuj tego dopasowania.**
+    Wszystkie cztery odpadają, gdy wymagamy granic słów. **Nie luzuj tego
+    dopasowania** — przypisanie cudzego shortu jest gorsze niż jego brak.
     """
     niemieckie = [r for r in rows if str(r.get("Ticker", "")).endswith(".DE")]
     if not niemieckie:
         return 0
-
-    rejestr = rejestr_bundesanzeiger()
-    if not rejestr:
-        return 0
-
-    uzupelnione = 0
-    for r in niemieckie:
-        if r.get("Krótkie pozycje (%)") not in (None, "", "BRAK"):
-            continue
-        dane = rejestr.get(klucz_de(r.get("Nazwa", "")))
-        if not dane:
-            continue
-        r["Krótkie pozycje (%)"] = dane["procent"]
-        r["Short: liczba pozycji"] = dane["liczba"]
-        r["Short: największy gracz"] = (
-            f"{dane['najwiekszy_kto']} ({dane['najwiekszy_ile']}%)"
-        )
-        r["Short z dnia"] = dane["data"]
-        r["Źródło shortów"] = "Bundesanzeiger — % wyemitowanego kapitału"
-        uzupelnione += 1
-
-    print(f"📉 Shorty: uzupełniono {uzupelnione} spółek z Frankfurtu "
+    ile = _uzupelnij_z_rejestru(
+        rows, ".DE", rejestr_bundesanzeiger(),
+        "Bundesanzeiger — % wyemitowanego kapitału",
+    )
+    print(f"📉 Shorty: uzupełniono {ile} spółek z Frankfurtu "
           f"(sprawdzono {len(niemieckie)}).")
-    return uzupelnione
+    return ile
 
 
 # ---------------------------------------------------------------------------
@@ -620,14 +696,6 @@ _SZUM_FR = re.compile(
     re.I,
 )
 _AKCENTY = str.maketrans("àâäçéèêëîïôöùûüÿœæ", "aaaceeeeiioouuuyoa")
-
-
-def klucz_fr(nazwa: str) -> str:
-    """Nazwa bez odstępów, akcentów i form prawnych."""
-    t = str(nazwa or "").lower().translate(_AKCENTY).replace("&", " and ")
-    t = re.sub(r"[^a-z0-9 ]", " ", t)
-    t = _SZUM_FR.sub(" ", t)
-    return re.sub(r"\s+", "", t)
 
 
 def rejestr_amf(api: str = API_AMF) -> dict[str, dict]:
@@ -694,7 +762,7 @@ def rejestr_amf(api: str = API_AMF) -> dict[str, dict]:
 
     wynik: dict[str, dict] = {}
     for emitent, pozycje in wg_emitenta.items():
-        k = klucz_fr(emitent)
+        k = slowa(emitent)
         if not k:
             continue
         najwiekszy = max(pozycje, key=lambda x: x[1])
@@ -714,40 +782,115 @@ def uzupelnij_fr(rows: list[dict]) -> int:
     """
     Dokłada dane o shortach spółkom z Paryża.
 
-    Dopasowanie WYŁĄCZNIE przez równość nazw, z tego samego powodu co przy
-    Frankfurcie. Luźniejsza reguła przypisywała **Société Générale** pozycję
-    krótką **Michelina** — bo pełna nazwa Michelina to „Compagnie Générale
-    des Établissements Michelin" i słowo „générale" pasuje do obu. Tracimy
-    przez to samego Michelina, i trudno: lepiej nie pokazać nic, niż pokazać
-    cudzy short. **Nie luzuj tego dopasowania.**
+    To francuskie dane wymusiły regułę wzajemnej jednoznaczności: bez niej
+    **Société Générale** dostawało pozycję krótką **Michelina**, bo pełna
+    nazwa Michelina to „Compagnie Générale des Établissements Michelin"
+    i słowo „générale" pasuje do obu. Teraz wpis trafia do Michelina,
+    a Société Générale nie dostaje nic — czyli poprawnie.
     """
     francuskie = [r for r in rows if str(r.get("Ticker", "")).endswith(".PA")]
     if not francuskie:
         return 0
-
-    rejestr = rejestr_amf()
-    if not rejestr:
-        return 0
-
-    uzupelnione = 0
-    for r in francuskie:
-        if r.get("Krótkie pozycje (%)") not in (None, "", "BRAK"):
-            continue
-        dane = rejestr.get(klucz_fr(r.get("Nazwa", "")))
-        if not dane:
-            continue
-        r["Krótkie pozycje (%)"] = dane["procent"]
-        r["Short: liczba pozycji"] = dane["liczba"]
-        r["Short: największy gracz"] = (
-            f"{dane['najwiekszy_kto']} ({dane['najwiekszy_ile']}%)"
-        )
-        r["Short z dnia"] = dane["data"]
-        r["Źródło shortów"] = "AMF — % wyemitowanego kapitału"
-        uzupelnione += 1
-
-    print(f"📉 Shorty: uzupełniono {uzupelnione} spółek z Paryża "
+    ile = _uzupelnij_z_rejestru(
+        rows, ".PA", rejestr_amf(), "AMF — % wyemitowanego kapitału"
+    )
+    print(f"📉 Shorty: uzupełniono {ile} spółek z Paryża "
           f"(sprawdzono {len(francuskie)}).")
-    return uzupelnione
+    return ile
+
+
+# ---------------------------------------------------------------------------
+# Madryt — CNMV
+# ---------------------------------------------------------------------------
+
+# Stały adres, ale plik jest w STARYM formacie XLS (OLE2), którego openpyxl
+# nie czyta — stąd zależność `xlrd`. To jedyne miejsce w projekcie, które
+# jej potrzebuje.
+ADRES_CNMV = "https://www.cnmv.es/DocPortal/Posiciones-Cortas/NetShortPositions.xls"
+
+
+def rejestr_cnmv(adres: str = ADRES_CNMV) -> dict[str, dict]:
+    """
+    Aktualne pozycje krótkie z rejestru CNMV, kluczowane znormalizowaną nazwą.
+
+    Plik ma osobny arkusz „Última_-_Current" wyłącznie z pozycjami otwartymi,
+    więc — tak jak przy CONSOB — nie trzeba odsiewać historii. Arkusze
+    „Serie" i „Anteriores" celowo pomijamy.
+    """
+    try:
+        import xlrd
+    except ImportError:
+        print("⚠️ Shorty CNMV: brak biblioteki xlrd — pomijam.")
+        return {}
+
+    try:
+        req = urllib.request.Request(adres, headers={"User-Agent": UA})
+        with urllib.request.urlopen(req, timeout=120) as odp:
+            dane = odp.read()
+        wb = xlrd.open_workbook(file_contents=dane)
+        nazwa_arkusza = next(
+            (n for n in wb.sheet_names() if "Current" in n or "ltima" in n), None
+        )
+        if not nazwa_arkusza:
+            print("⚠️ Shorty CNMV: nie ma arkusza z aktualnymi pozycjami.")
+            return {}
+        ws = wb.sheet_by_name(nazwa_arkusza)
+    except Exception as e:  # noqa: BLE001
+        print(f"⚠️ Shorty CNMV: nie udało się pobrać rejestru ({type(e).__name__}).")
+        return {}
+
+    try:
+        # Nagłówek nie stoi w pierwszym wierszu — szukamy go po kolumnie ISIN.
+        naglowek = next(
+            i for i in range(ws.nrows)
+            if any("ISIN" in str(ws.cell_value(i, j)) for j in range(ws.ncols))
+        )
+    except StopIteration:
+        print("⚠️ Shorty CNMV: nie znalazłem nagłówka — plik pewnie się zmienił.")
+        return {}
+
+    wg_emitenta: dict[str, list[tuple]] = defaultdict(list)
+    for i in range(naglowek + 1, ws.nrows):
+        try:
+            emitent = str(ws.cell_value(i, 2)).strip()
+            posiadacz = str(ws.cell_value(i, 3)).strip()
+            data = str(ws.cell_value(i, 4)).strip()[:10]
+            procent = _procent_z_tekstu(ws.cell_value(i, 5))
+        except IndexError:
+            continue
+        if not emitent or procent is None:
+            continue
+        wg_emitenta[emitent].append((posiadacz, procent, data))
+
+    wynik: dict[str, dict] = {}
+    for emitent, pozycje in wg_emitenta.items():
+        k = slowa(emitent)
+        if not k:
+            continue
+        najwiekszy = max(pozycje, key=lambda x: x[1])
+        wynik[k] = {
+            "procent": round(sum(x[1] for x in pozycje), 2),
+            "liczba": len(pozycje),
+            "najwiekszy_kto": najwiekszy[0],
+            "najwiekszy_ile": round(najwiekszy[1], 2),
+            "data": max(x[2] for x in pozycje),
+        }
+
+    print(f"📉 Shorty CNMV: {len(wynik)} emitentów z otwartą pozycją krótką.")
+    return wynik
+
+
+def uzupelnij_es(rows: list[dict]) -> int:
+    """Dokłada dane o shortach spółkom z Madrytu."""
+    hiszpanskie = [r for r in rows if str(r.get("Ticker", "")).endswith(".MC")]
+    if not hiszpanskie:
+        return 0
+    ile = _uzupelnij_z_rejestru(
+        rows, ".MC", rejestr_cnmv(), "CNMV — % wyemitowanego kapitału"
+    )
+    print(f"📉 Shorty: uzupełniono {ile} spółek z Madrytu "
+          f"(sprawdzono {len(hiszpanskie)}).")
+    return ile
 
 
 def domknij_kolumny(rows: list[dict]) -> None:

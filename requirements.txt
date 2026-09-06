@@ -7,3 +7,6 @@ lxml
 matplotlib>=3.8
 openpyxl>=3.1
 libsql>=0.1
+# Stary format XLS (OLE2) — potrzebny wyłącznie do rejestru
+# pozycji krótkich CNMV; openpyxl czyta tylko XLSX.
+xlrd>=2.0
