@@ -164,6 +164,9 @@ export default async function StronaSpolki({
           nazwa={String(spolka.Nazwa ?? "")}
           symbol={symbolTradingView(String(spolka.Ticker ?? ""))}
           adresZamkniecia={`/spolka/${encodeURIComponent(String(spolka.Ticker))}`}
+          cena={cena}
+          waluta={String(spolka.Waluta ?? "")}
+          powrot={`/spolka/${encodeURIComponent(String(spolka.Ticker))}?wykres=1`}
         />
       )}
 

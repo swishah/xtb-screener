@@ -8,7 +8,7 @@ import WykresPelny from "../spolka/WykresPelny";
 import { migawkaBezpieczna } from "@/lib/dane";
 import { newsySpolki } from "@/lib/newsy";
 import { symbolTradingView } from "@/lib/tradingview";
-import { FILTRY_DOMYSLNE, filtruj, wartosci, type Filtry } from "@/lib/filtry";
+import { FILTRY_DOMYSLNE, filtruj, liczba, wartosci, type Filtry } from "@/lib/filtry";
 import { wymagajZalogowania } from "@/lib/sesja";
 
 export const dynamic = "force-dynamic";
@@ -160,6 +160,9 @@ export default async function Screener({
           nazwa={String(doWykresu.Nazwa ?? "")}
           symbol={symbolTradingView(String(doWykresu.Ticker ?? ""))}
           adresZamkniecia={adres({ wykres: null })}
+          cena={liczba(doWykresu.Cena)}
+          waluta={String(doWykresu.Waluta ?? "")}
+          powrot={adres({})}
         />
       )}
     </main>

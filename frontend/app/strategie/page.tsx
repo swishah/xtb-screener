@@ -263,6 +263,9 @@ export default async function Strategie({
           nazwa={String(doWykresu.Nazwa ?? "")}
           symbol={symbolTradingView(String(doWykresu.Ticker ?? ""))}
           adresZamkniecia={adres({ wykres: null })}
+          cena={liczba(doWykresu.Cena)}
+          waluta={String(doWykresu.Waluta ?? "")}
+          powrot={adres({})}
         />
       )}
     </main>
