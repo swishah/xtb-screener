@@ -132,3 +132,78 @@ export function anomalieCZ(
     return r !== 0 ? r : porownajRemis(a.spolka, b.spolka);
   });
 }
+
+// ---------------------------------------------------------------------------
+// Porównanie jednej spółki z medianą jej sektora (moduł „vs Sektor")
+// ---------------------------------------------------------------------------
+
+/** Lustro `SECTOR_METRICS` z `ui/common.py` — te same wskaźniki i kierunki. */
+export const WSKAZNIKI_SEKTORA: { kolumna: string; kierunek: "wyzej" | "nizej" }[] = [
+  { kolumna: "C/Z (P/E)", kierunek: "nizej" },
+  { kolumna: "Forward C/Z", kierunek: "nizej" },
+  { kolumna: "C/WK (P/B)", kierunek: "nizej" },
+  { kolumna: "ROE (%)", kierunek: "wyzej" },
+  { kolumna: "Marża Operac. (%)", kierunek: "wyzej" },
+  { kolumna: "Marża netto (%)", kierunek: "wyzej" },
+  { kolumna: "Marża brutto (%)", kierunek: "wyzej" },
+  { kolumna: "Dług/Kapitał", kierunek: "nizej" },
+  { kolumna: "Wzrost przychodów (%)", kierunek: "wyzej" },
+  { kolumna: "Wzrost EPS (%)", kierunek: "wyzej" },
+  { kolumna: "Stopa Dyw. (%)", kierunek: "wyzej" },
+  { kolumna: "Payout ratio (%)", kierunek: "nizej" },
+  { kolumna: "RSI", kierunek: "nizej" },
+];
+
+/**
+ * Poniżej tylu spółek mediana sektora przestaje cokolwiek znaczyć.
+ *
+ * Ta sama granica co w heatmapach Globalnego przeglądu — mediana z dwóch
+ * spółek to po prostu jedna z nich, a wygląda jak charakterystyka branży.
+ */
+export const MIN_SPOLEK_W_SEKTORZE = 3;
+
+export type Ocena = "lepiej" | "gorzej" | "podobnie" | "brak";
+
+export type PorownanieWskaznika = {
+  kolumna: string;
+  kierunek: "wyzej" | "nizej";
+  wartosc: number | null;
+  mediana: number | null;
+  /** Różnica w procentach względem mediany; null, gdy mediana wynosi zero. */
+  roznica: number | null;
+  ocena: Ocena;
+};
+
+/**
+ * Porównuje spółkę z medianą jej sektora, wskaźnik po wskaźniku.
+ *
+ * PRÓG 5% NIE JEST OZDOBĄ. Bez niego spółka odstająca o 0,3% dostawałaby
+ * zieloną albo czerwoną ocenę, sugerując różnicę tam, gdzie jej nie ma —
+ * a przy medianach liczonych z kilkunastu spółek taki ruch to szum.
+ */
+export function porownajZSektorem(
+  spolka: Instrument,
+  rowiesnicy: Instrument[],
+): PorownanieWskaznika[] {
+  return WSKAZNIKI_SEKTORA.map(({ kolumna, kierunek }) => {
+    const wartosci = rowiesnicy
+      .map((r) => liczba(r[kolumna]))
+      .filter((w): w is number => w !== null);
+    const med = mediana(wartosci);
+    const wlasna = liczba(spolka[kolumna]);
+
+    if (wlasna === null || med === null) {
+      return { kolumna, kierunek, wartosc: wlasna, mediana: med, roznica: null, ocena: "brak" as Ocena };
+    }
+
+    const roznica = med !== 0 ? ((wlasna - med) / Math.abs(med)) * 100 : null;
+    let ocena: Ocena;
+    if (roznica !== null && Math.abs(roznica) < 5) {
+      ocena = "podobnie";
+    } else {
+      const lepiej = kierunek === "wyzej" ? wlasna > med : wlasna < med;
+      ocena = lepiej ? "lepiej" : "gorzej";
+    }
+    return { kolumna, kierunek, wartosc: wlasna, mediana: med, roznica, ocena };
+  });
+}

@@ -186,6 +186,31 @@ export async function migawka(dzien?: string): Promise<Migawka> {
 }
 
 /**
+ * Wszystkie migawki naraz, pogrupowane po dacie — wyłącznie do backtestów.
+ *
+ * To jedyne zapytanie w projekcie, które czyta całą tabelę (dziesiątki tysięcy
+ * wierszy), więc wołaj je TYLKO na wyraźne żądanie użytkownika, nigdy przy
+ * zwykłym otwarciu strony. Bufor migawki tego nie obsługuje i nie powinien —
+ * trzymanie całej historii w pamięci procesu kosztowałoby więcej, niż warte
+ * jest oszczędzenie jednego zapytania raz na jakiś czas.
+ */
+export async function wszystkieMigawki(): Promise<Map<string, Instrument[]>> {
+  const wynik = await klient().execute(
+    "SELECT scan_date, payload FROM snapshots ORDER BY scan_date",
+  );
+  const wgDaty = new Map<string, Instrument[]>();
+  for (const wiersz of wynik.rows) {
+    const rekord = parsujPayload(String(wiersz.payload));
+    if (!rekord) continue;
+    const dzien = String(wiersz.scan_date);
+    const lista = wgDaty.get(dzien);
+    if (lista) lista.push(rekord);
+    else wgDaty.set(dzien, [rekord]);
+  }
+  return wgDaty;
+}
+
+/**
  * Ścieżka ceny jednej spółki, po jednym punkcie na migawkę.
  *
  * Potrzebna do wykresu, na którym przeciąga się linię alarmu. Celowo NIE

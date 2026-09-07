@@ -1484,3 +1484,122 @@ th.kol-wykres, td.kol-wykres { width: 1%; white-space: nowrap; text-align: cente
   color: var(--muted);
   margin-top: 2px;
 }
+
+/* ---------- moduł Własny scoring ---------- */
+.wagi-siatka {
+  display: grid;
+  gap: 12px 18px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+.waga { display: flex; flex-direction: column; gap: 3px; }
+.waga.wylaczona { opacity: 0.45; }
+.waga-etykieta {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+.waga-etykieta b {
+  font-family: var(--mono);
+  font-size: 0.74rem;
+  color: var(--k2-fg);
+  white-space: nowrap;
+}
+.waga.wylaczona .waga-etykieta b { color: var(--muted); font-weight: 400; }
+.waga input[type="range"] { width: 100%; accent-color: var(--k2-fg); }
+
+/* Pigułki wyboru parametrów backtestu — odnośniki, nie przyciski, więc stan
+   siedzi w adresie i da się go zapisać w zakładce. */
+.podpanel-ustawienia {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+.pigulka {
+  font-family: var(--mono);
+  font-size: 0.76rem;
+  padding: 3px 9px;
+  border-radius: 7px;
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+.pigulka:hover { color: var(--fg); border-color: var(--fg); }
+.pigulka.aktywna {
+  background: var(--k2-bg);
+  color: var(--k2-fg);
+  border-color: transparent;
+}
+.tab-scoring th, .tab-scoring td,
+.tab-backtest th, .tab-backtest td { white-space: nowrap; }
+
+/* ---------- moduł vs Sektor ---------- */
+.tab-vs-sektor td.t small {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--muted);
+  font-weight: 400;
+}
+.tab-vs-sektor th, .tab-vs-sektor td,
+.tab-sektor-lista th, .tab-sektor-lista td { white-space: nowrap; }
+.ocena {
+  font-size: 0.78rem;
+  padding: 2px 9px;
+  border-radius: 7px;
+  white-space: nowrap;
+}
+.ocena.lepiej { background: var(--good-bg); color: var(--good-fg); }
+.ocena.gorzej { background: rgba(192, 57, 46, 0.12); color: var(--down); }
+.ocena.podobnie { background: var(--pill-bg); color: var(--pill-fg); }
+.ocena.brak-oceny { background: transparent; color: var(--muted); }
+
+/* ---------- moduł Analiza transakcji ---------- */
+.form-transakcje {
+  margin-top: 14px;
+  padding: 16px 20px;
+  display: flex;
+  gap: 18px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+.form-transakcje label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+.form-transakcje .pole-plik { flex: 1 1 320px; }
+.form-transakcje input[type="file"] {
+  font: inherit;
+  font-size: 0.82rem;
+  color: var(--fg);
+}
+.form-transakcje select {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 8px 10px;
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--fg);
+}
+.form-transakcje button {
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.86rem;
+  padding: 9px 20px;
+  border-radius: 9px;
+  cursor: pointer;
+  background: var(--k5-bg);
+  color: var(--k5-fg);
+  border: 1px solid transparent;
+}
+.form-transakcje button:hover:not(:disabled) { border-color: var(--k5-fg); }
+.form-transakcje button:disabled { opacity: 0.55; cursor: progress; }
+.tab-transakcje th, .tab-transakcje td,
+.tab-mapa th, .tab-mapa td { white-space: nowrap; }
+.tab-transakcje td.t small { display: block; font-weight: 400; }

@@ -37,7 +37,7 @@ export const KATEGORIE: Kategoria[] = [
     klasa: "k2",
     moduly: [
       { nazwa: "Strategie", opis: "9 gotowych rankingów", sciezka: "/strategie" },
-      { nazwa: "Własny scoring", opis: "Twoje wagi wskaźników", sciezka: null },
+      { nazwa: "Własny scoring", opis: "Twoje wagi wskaźników", sciezka: "/scoring" },
     ],
   },
   {
@@ -45,7 +45,7 @@ export const KATEGORIE: Kategoria[] = [
     klasa: "k3",
     moduly: [
       { nazwa: "Profil spółki", opis: "Wybierz spółkę w screenerze", sciezka: "/screener" },
-      { nazwa: "vs Sektor", opis: "Na tle mediany branży", sciezka: null },
+      { nazwa: "vs Sektor", opis: "Na tle mediany branży", sciezka: "/sektor" },
       { nazwa: "Tanie vs sektor", opis: "Niskie C/Z w swoim sektorze", sciezka: "/tanie" },
     ],
   },
@@ -61,8 +61,8 @@ export const KATEGORIE: Kategoria[] = [
     klasa: "k5",
     moduly: [
       { nazwa: "Alarmy cenowe", opis: "Progi na wykresie", sciezka: "/alarmy" },
-      { nazwa: "Watchlist", opis: "Obserwowane z notatkami", sciezka: "/watchlist" },
-      { nazwa: "Analiza transakcji", opis: "Import z XTB", sciezka: null },
+      { nazwa: "Watchlisty", opis: "Kilka list z notatkami", sciezka: "/watchlist" },
+      { nazwa: "Analiza transakcji", opis: "Import z XTB", sciezka: "/transakcje" },
       { nazwa: "Własne instrumenty", opis: "Ręcznie dodane tickery", sciezka: null },
     ],
   },
