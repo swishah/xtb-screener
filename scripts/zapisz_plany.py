@@ -29,6 +29,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from core import bramka, db  # noqa: E402
 
+# WYJŚCIE WYMUSZAMY NA UTF-8 I TO NIE JEST OZDOBA.
+# Na Windowsie `sys.stdout` dziedziczy kodowanie konsoli (zmierzone: cp1250),
+# w którym emoji z naszych komunikatów po prostu nie istnieją — pierwszy
+# `print` z ikoną wywala skrypt wyjątkiem UnicodeEncodeError, zanim zdąży
+# cokolwiek zrobić. Złapane na zadaniu cyklicznym: uruchomione z powłoki bez
+# PYTHONIOENCODING padało w pierwszej linii, a w kodzie nie było widać nic
+# podejrzanego.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 # Ile planów zostaje na dany dzień. Dziesięć to tyle, ile człowiek jest
 # w stanie przejrzeć rano; przy trzydziestu przegląd zamienia się w listę,
 # której nikt nie czyta.
