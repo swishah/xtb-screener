@@ -1757,6 +1757,17 @@ th.kol-wykres, td.kol-wykres { width: 1%; white-space: nowrap; text-align: cente
 .pewnosc { font-size: 0.82rem; letter-spacing: 2px; color: var(--k5-fg); }
 .pewnosc-puste { opacity: 0.22; }
 
+/* Pasek narzedzi karty: wykres i stan. margin-left:auto siedzi na CALEJ
+   grupie, a nie na samym znaczniku stanu — inaczej przycisk wykresu
+   przyklejalby sie do nazwy spolki po lewej. Ta sama pulapka co przy
+   .naklada-narzedzia. */
+.plan-narzedzia {
+  margin-left: auto; display: flex; align-items: center; gap: 8px;
+}
+
+/* Karta spolki, ktorej profil jest wlasnie otwarty w panelu obok. */
+.plan-wybrany { border-color: var(--k5-fg); }
+
 .plan-stopka {
   display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px;
   padding-top: 9px; font-size: 0.79rem; color: var(--muted);
@@ -1792,6 +1803,7 @@ th.kol-wykres, td.kol-wykres { width: 1%; white-space: nowrap; text-align: cente
 @media (max-width: 720px) {
   .plan-glowa { gap: 6px; }
   .plan-nazwa { margin-left: 0; flex-basis: 100%; }
+  .plan-narzedzia { margin-left: 0; flex-basis: 100%; }
   .plan-poziomy { gap: 10px 20px; }
   .plan-anuluj { margin-left: 0; flex-basis: 100%; }
 

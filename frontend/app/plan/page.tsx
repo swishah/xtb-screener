@@ -1,7 +1,12 @@
 import Link from "next/link";
 import Pasek from "../Pasek";
+import PanelSpolki from "../PanelSpolki";
+import WykresPelny from "../spolka/WykresPelny";
 import { anuluj } from "./akcje";
 import { migawkaBezpieczna } from "@/lib/dane";
+import { liczba, type Instrument } from "@/lib/filtry";
+import { newsySpolki } from "@/lib/newsy";
+import { symbolTradingView } from "@/lib/tradingview";
 import {
   ETYKIETY_STANU,
   OPISY_STANU,
@@ -52,11 +57,17 @@ function KartaPlanu({
   cena,
   nazwa,
   waluta,
+  linkProfil,
+  linkWykres,
+  wybrany,
 }: {
   plan: Plan;
   cena: number | null;
   nazwa: string;
   waluta: string;
+  linkProfil: string;
+  linkWykres: string;
+  wybrany: boolean;
 }) {
   const c = cyfryCeny(plan.wejscieDo);
   const gdzie = polozenie(plan, cena);
@@ -67,17 +78,24 @@ function KartaPlanu({
     .filter(Boolean);
 
   return (
-    <div className="card plan">
+    <div className={wybrany ? "card plan plan-wybrany" : "card plan"}>
       <div className="plan-glowa">
         <div>
-          <Link className="plan-ticker" href={`/spolka/${encodeURIComponent(plan.ticker)}`}>
+          {/* Ten sam gest co w Screenerze i Dywidendach: kliknięcie w ticker
+              otwiera profil w panelu obok, a nie osobną stronę. */}
+          <Link className="plan-ticker" href={linkProfil}>
             {plan.ticker}
           </Link>
           <span className="plan-nazwa">{nazwa}</span>
         </div>
-        <span className={`stan-pill stan-${plan.stan}`} title={OPISY_STANU[plan.stan]}>
-          {ETYKIETY_STANU[plan.stan]}
-        </span>
+        <div className="plan-narzedzia">
+          <Link href={linkWykres} className="btn-wykres">
+            wykres
+          </Link>
+          <span className={`stan-pill stan-${plan.stan}`} title={OPISY_STANU[plan.stan]}>
+            {ETYKIETY_STANU[plan.stan]}
+          </span>
+        </div>
       </div>
 
       <p className="plan-teza">{plan.teza}</p>
@@ -187,28 +205,69 @@ export default async function PlanDnia({
 
   const stat = podsumowanie(zamkniete);
 
-  const rynek = new Map(
-    instrumenty.map((i) => [
-      String(i.Ticker ?? ""),
-      {
-        cena: typeof i.Cena === "number" ? i.Cena : null,
-        nazwa: String(i.Nazwa ?? ""),
-        waluta: String(i.Waluta ?? ""),
-      },
-    ]),
+  const rynek = new Map<string, Instrument>(
+    instrumenty.map((i) => [String(i.Ticker ?? "").toUpperCase(), i]),
   );
-  const opis = (t: string) =>
-    rynek.get(t) ?? { cena: null, nazwa: "", waluta: "" };
+  const opis = (t: string) => {
+    const i = rynek.get(t.toUpperCase());
+    return {
+      cena: i ? liczba(i.Cena) : null,
+      nazwa: i ? String(i.Nazwa ?? "") : "",
+      waluta: i ? String(i.Waluta ?? "") : "",
+    };
+  };
 
-  // Plany z wcześniejszych dni, które wciąż żyją — inaczej znikałyby z oczu
-  // dokładnie wtedy, gdy są najciekawsze.
+  // Profil w panelu obok i wykres na nakładce — dokładnie ten sam mechanizm
+  // co w Screenerze: stan siedzi w adresie, nie w komponencie, więc działa
+  // przycisk „wstecz” i da się wysłać komuś link prosto do wykresu.
+  const wybranyTicker = (jeden("wybrana") ?? "").toUpperCase();
+  const wybrana = wybranyTicker ? rynek.get(wybranyTicker) : undefined;
+  const newsy = wybrana
+    ? await newsySpolki(String(wybrana.Ticker), String(wybrana.Nazwa ?? ""))
+    : [];
+
+  const wykresTicker = (jeden("wykres") ?? "").toUpperCase();
+  const doWykresu = wykresTicker ? rynek.get(wykresTicker) : undefined;
+
+  function adres(zmiany: Record<string, string | null>): string {
+    const p = new URLSearchParams();
+    for (const [k, v] of Object.entries(q)) {
+      const w = Array.isArray(v) ? v[0] : v;
+      // `wynik` to jednorazowy komunikat po akcji — nie ma go ciągnąć dalej
+      // przy każdym kliknięciu w spółkę.
+      if (w && k !== "wynik") p.set(k, w);
+    }
+    for (const [k, v] of Object.entries(zmiany)) {
+      if (v === null) p.delete(k);
+      else p.set(k, v);
+    }
+    const s = p.toString();
+    return s ? `/plan?${s}` : "/plan";
+  }
+
   const zPoprzednichDni = otwarte.filter((p) => p.dzien !== dzien);
 
   const wynik = jeden("wynik");
   const komunikat = wynik ? KOMUNIKATY[wynik] : null;
 
+  function karta(p: Plan) {
+    const o = opis(p.ticker);
+    return (
+      <KartaPlanu
+        key={p.id}
+        plan={p}
+        cena={o.cena}
+        nazwa={o.nazwa}
+        waluta={o.waluta}
+        linkProfil={adres({ wybrana: p.ticker })}
+        linkWykres={adres({ wykres: p.ticker })}
+        wybrany={p.ticker.toUpperCase() === wybranyTicker}
+      />
+    );
+  }
+
   return (
-    <main className="wrap">
+    <main className="wrap wrap-szeroki">
       <Pasek dataMigawki={data} tryb={tryb} />
 
       <div className="cardhead" style={{ padding: "18px 0 4px" }}>
@@ -224,7 +283,8 @@ export default async function PlanDnia({
         przez rankingi. Każdy plan przeszedł mechaniczną kontrolę: stop i cel
         muszą odpowiadać poziomom policzonym z notowań, zysk do ryzyka co
         najmniej 1,5, a stop leżeć między 0,5 a 3 ATR od wejścia. Rozliczane
-        są same, przy codziennym skanie.
+        są same, przy codziennym skanie. Kliknij ticker, żeby zobaczyć profil
+        spółki obok, albo „wykres”, żeby otworzyć notowanie i postawić alarm.
       </p>
 
       {komunikat && (
@@ -260,7 +320,7 @@ export default async function PlanDnia({
           <p className="drobne">
             R to jednostka ryzyka: różnica między zakładanym wejściem
             a stop-lossem. +2 R znaczy „zarobione dwa razy tyle, ile było na
-            stole". Rozliczenie zakłada wejście po najgorszej cenie w strefie,
+            stole”. Rozliczenie zakłada wejście po najgorszej cenie w strefie,
             a przy świecy, która dotknęła i stopa, i celu — przyjmuje stop.
           </p>
         </>
@@ -271,7 +331,7 @@ export default async function PlanDnia({
           {dni.slice(0, 14).map((d) => (
             <Link
               key={d}
-              href={`/plan?dzien=${d}`}
+              href={adres({ dzien: d })}
               className={d === dzien ? "wybor-poz aktywna" : "wybor-poz"}
             >
               {d}
@@ -280,120 +340,129 @@ export default async function PlanDnia({
         </div>
       )}
 
-      {dni.length === 0 ? (
-        <div className="card" style={{ marginTop: 14, padding: "16px 18px" }}>
-          <h3 className="naglowek-sekcji">Nie ma jeszcze żadnych planów</h3>
-          <p className="pusto">
-            Dossier kandydatów przygotowuje się samo o 6:00 w dni robocze, ale
-            plany powstają dopiero wtedy, gdy je zamówisz — poleceniem{" "}
-            <code>/plan-dnia</code> w Claude Code. Analiza wykresów nie chodzi
-            automatycznie i to jest świadome: wybór poziomów kosztuje, a Ty i
-            tak decydujesz, w które dni chcesz go mieć.
-          </p>
-        </div>
-      ) : dnia.length === 0 ? (
-        <div className="card" style={{ marginTop: 14, padding: "16px 18px" }}>
-          <p className="pusto">Na {dzien} nie zapisano żadnego planu.</p>
-        </div>
-      ) : (
-        <div className="plany">
-          {dnia.map((p) => {
-            const o = opis(p.ticker);
-            return (
-              <KartaPlanu
-                key={p.id}
-                plan={p}
-                cena={o.cena}
-                nazwa={o.nazwa}
-                waluta={o.waluta}
-              />
-            );
-          })}
-        </div>
-      )}
-
-      {zPoprzednichDni.length > 0 && (
-        <>
-          <div className="cardhead" style={{ padding: "20px 0 4px" }}>
-            <h2 style={{ fontSize: "1.05rem" }}>Wciąż otwarte z wcześniejszych dni</h2>
-            <em>{zPoprzednichDni.length}</em>
-          </div>
-          <div className="plany">
-            {zPoprzednichDni.map((p) => {
-              const o = opis(p.ticker);
-              return (
-                <KartaPlanu
-                  key={p.id}
-                  plan={p}
-                  cena={o.cena}
-                  nazwa={o.nazwa}
-                  waluta={o.waluta}
-                />
-              );
-            })}
-          </div>
-        </>
-      )}
-
-      {zamkniete.length > 0 && (
-        <>
-          <div className="cardhead" style={{ padding: "20px 0 4px" }}>
-            <h2 style={{ fontSize: "1.05rem" }}>Rozliczone</h2>
-            <em>ostatnie {zamkniete.length}</em>
-          </div>
-          <div className="card" style={{ marginTop: 12 }}>
-            <div className="scroll">
-              <table className="tab-plany">
-                <thead>
-                  <tr>
-                    <th>Spółka</th>
-                    <th>Plan z dnia</th>
-                    <th>Jak się skończył</th>
-                    <th>Zamknięty</th>
-                    <th className="r">Wynik</th>
-                    <th className="r">Sesji</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {zamkniete.map((p) => (
-                    <tr key={p.id}>
-                      <td className="t">
-                        <Link href={`/spolka/${encodeURIComponent(p.ticker)}`}>
-                          {p.ticker}
-                        </Link>
-                      </td>
-                      <td data-l="Plan z dnia">{p.dzien}</td>
-                      <td data-l="Koniec">
-                        <span className={`stan-pill stan-${p.stan}`}>
-                          {ETYKIETY_STANU[p.stan]}
-                        </span>
-                      </td>
-                      <td data-l="Zamknięty">{p.dataZamkniecia ?? "—"}</td>
-                      <td className="r n" data-l="Wynik">
-                        {p.wynikR === null ? (
-                          <span className="brak">—</span>
-                        ) : (
-                          <b
-                            className={
-                              p.wynikR > 0 ? "up" : p.wynikR < 0 ? "down" : undefined
-                            }
-                          >
-                            {p.wynikR > 0 ? "+" : ""}
-                            {lb(p.wynikR, 2)} R
-                          </b>
-                        )}
-                      </td>
-                      <td className="r n" data-l="Sesji">
-                        {p.sesjiMinelo}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+      <div className={wybrana ? "uklad-z-panelem" : undefined}>
+        <div>
+          {dni.length === 0 ? (
+            <div className="card" style={{ marginTop: 14, padding: "16px 18px" }}>
+              <h3 className="naglowek-sekcji">Nie ma jeszcze żadnych planów</h3>
+              <p className="pusto">
+                Dossier kandydatów przygotowuje się samo o 6:00 w dni robocze,
+                ale plany powstają dopiero wtedy, gdy je zamówisz — poleceniem{" "}
+                <code>/plan-dnia</code> w Claude Code. Analiza wykresów nie
+                chodzi automatycznie i to jest świadome: wybór poziomów
+                kosztuje, a Ty i tak decydujesz, w które dni chcesz go mieć.
+              </p>
             </div>
-          </div>
-        </>
-      )}
+          ) : dnia.length === 0 ? (
+            <div className="card" style={{ marginTop: 14, padding: "16px 18px" }}>
+              <p className="pusto">Na {dzien} nie zapisano żadnego planu.</p>
+            </div>
+          ) : (
+            <div className="plany">{dnia.map(karta)}</div>
+          )}
+
+          {zPoprzednichDni.length > 0 && (
+            <>
+              <div className="cardhead" style={{ padding: "20px 0 4px" }}>
+                <h2 style={{ fontSize: "1.05rem" }}>
+                  Wciąż otwarte z wcześniejszych dni
+                </h2>
+                <em>{zPoprzednichDni.length}</em>
+              </div>
+              <div className="plany">{zPoprzednichDni.map(karta)}</div>
+            </>
+          )}
+
+          {zamkniete.length > 0 && (
+            <>
+              <div className="cardhead" style={{ padding: "20px 0 4px" }}>
+                <h2 style={{ fontSize: "1.05rem" }}>Rozliczone</h2>
+                <em>ostatnie {zamkniete.length}</em>
+              </div>
+              <div className="card" style={{ marginTop: 12 }}>
+                <div className="scroll">
+                  <table className="tab-plany">
+                    <thead>
+                      <tr>
+                        <th>Spółka</th>
+                        <th className="kol-wykres">Wykres</th>
+                        <th>Plan z dnia</th>
+                        <th>Jak się skończył</th>
+                        <th>Zamknięty</th>
+                        <th className="r">Wynik</th>
+                        <th className="r">Sesji</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {zamkniete.map((p) => (
+                        <tr
+                          key={p.id}
+                          className={
+                            p.ticker.toUpperCase() === wybranyTicker
+                              ? "wiersz-wybrany"
+                              : undefined
+                          }
+                        >
+                          <td className="t">
+                            <Link
+                              href={adres({ wybrana: p.ticker })}
+                              className="ticker-link"
+                            >
+                              {p.ticker}
+                              <small>{opis(p.ticker).nazwa}</small>
+                            </Link>
+                          </td>
+                          <td className="kol-wykres">
+                            <Link
+                              href={adres({ wykres: p.ticker })}
+                              className="btn-wykres"
+                            >
+                              wykres
+                            </Link>
+                          </td>
+                          <td data-l="Plan z dnia">{p.dzien}</td>
+                          <td data-l="Koniec">
+                            <span className={`stan-pill stan-${p.stan}`}>
+                              {ETYKIETY_STANU[p.stan]}
+                            </span>
+                          </td>
+                          <td data-l="Zamknięty">{p.dataZamkniecia ?? "—"}</td>
+                          <td className="r n" data-l="Wynik">
+                            {p.wynikR === null ? (
+                              <span className="brak">—</span>
+                            ) : (
+                              <b
+                                className={
+                                  p.wynikR > 0 ? "up" : p.wynikR < 0 ? "down" : undefined
+                                }
+                              >
+                                {p.wynikR > 0 ? "+" : ""}
+                                {lb(p.wynikR, 2)} R
+                              </b>
+                            )}
+                          </td>
+                          <td className="r n" data-l="Sesji">
+                            {p.sesjiMinelo}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
+        {wybrana && (
+          <PanelSpolki
+            spolka={wybrana}
+            wszystkie={instrumenty}
+            newsy={newsy}
+            adresZamkniecia={adres({ wybrana: null })}
+          />
+        )}
+      </div>
 
       <p className="drobne" style={{ marginTop: 18 }}>
         Skąd się to bierze: o 6:00 GitHub Actions zbiera po pięć spółek z czoła
@@ -404,6 +473,18 @@ export default async function PlanDnia({
         planu nie można już zmienić — inaczej statystyka skuteczności nie
         znaczyłaby nic.
       </p>
+
+      {doWykresu && (
+        <WykresPelny
+          ticker={String(doWykresu.Ticker)}
+          nazwa={String(doWykresu.Nazwa ?? "")}
+          symbol={symbolTradingView(String(doWykresu.Ticker ?? ""))}
+          adresZamkniecia={adres({ wykres: null })}
+          cena={liczba(doWykresu.Cena)}
+          waluta={String(doWykresu.Waluta ?? "")}
+          powrot={adres({})}
+        />
+      )}
     </main>
   );
 }
