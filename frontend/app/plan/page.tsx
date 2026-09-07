@@ -273,6 +273,9 @@ export default async function PlanDnia({
       <div className="cardhead" style={{ padding: "18px 0 4px" }}>
         <h2 style={{ fontSize: "1.15rem" }}>Plan dnia</h2>
         <em>{dzien ? dzien : "brak planów"}</em>
+        <Link className="link" href="/dossier">
+          Dossier kandydatów →
+        </Link>
         <Link className="link" href="/">
           ← Wróć na pulpit
         </Link>

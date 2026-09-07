@@ -1821,3 +1821,39 @@ th.kol-wykres, td.kol-wykres { width: 1%; white-space: nowrap; text-align: cente
     text-transform: uppercase; color: var(--muted); margin-bottom: 2px;
   }
 }
+
+/* =============================================================================
+   DOSSIER KANDYDATOW
+   ========================================================================== */
+
+/* Trzy interwaly jako strzalki, nie slowa: w tabeli chodzi o ZGODNOSC trzech
+   ram czasowych, a trzy strzalki w gore widac natychmiast. Pelna nazwa siedzi
+   w dymku. */
+.trendy { display: inline-flex; gap: 3px; font-family: var(--mono); font-size: 0.95rem; }
+.trendy span { line-height: 1; }
+
+.tab-dossier th, .tab-dossier td { white-space: nowrap; }
+.tab-dossier td.kol-rankingi {
+  white-space: normal; max-width: 260px;
+  font-size: 0.8rem; color: var(--muted);
+}
+.tab-dossier-historia th, .tab-dossier-historia td { white-space: nowrap; }
+
+@media (max-width: 720px) {
+  .tab-dossier tbody tr, .tab-dossier-historia tbody tr {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 9px 14px; padding: 14px 16px 15px;
+  }
+  .tab-dossier td, .tab-dossier-historia td { text-align: left; font-size: 0.92rem; }
+  .tab-dossier td.t, .tab-dossier-historia td.t { grid-column: 1 / -1; font-size: 1.05rem; }
+  .tab-dossier td.kol-rankingi { grid-column: 1 / -1; max-width: none; }
+  .tab-dossier td.r, .tab-dossier-historia td.r { text-align: left; }
+  .tab-dossier td[data-l]::before,
+  .tab-dossier-historia td[data-l]::before {
+    content: attr(data-l);
+    display: block;
+    font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--muted); margin-bottom: 2px;
+  }
+  .tab-dossier .miernik { justify-content: flex-start; }
+}
