@@ -12,7 +12,10 @@ import { alarmySpolki } from "@/lib/alarmy";
 import { czyObserwuje } from "@/lib/obserwowane";
 import UstawAlarm from "../../alarmy/UstawAlarm";
 import ListaAlarmow from "../../alarmy/Lista";
-import { dodaj as obserwuj, usun as przestanObserwowac } from "../../watchlist/akcje";
+import {
+  obserwujZProfilu as obserwuj,
+  przestanObserwowac,
+} from "../../watchlist/akcje";
 
 export const dynamic = "force-dynamic";
 

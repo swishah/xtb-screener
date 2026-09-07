@@ -28,7 +28,7 @@ export const KATEGORIE: Kategoria[] = [
     klasa: "k1",
     moduly: [
       { nazwa: "Screener", opis: "Wszystko naraz, z filtrami", sciezka: "/screener" },
-      { nazwa: "Globalny przegląd", opis: "Szerokość rynku, heatmapy", sciezka: null },
+      { nazwa: "Globalny przegląd", opis: "Szerokość rynku, heatmapy", sciezka: "/przeglad" },
       { nazwa: "Dashboard", opis: "Widok kafelkowy", sciezka: null },
     ],
   },

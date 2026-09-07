@@ -1290,3 +1290,197 @@ th.kol-wykres, td.kol-wykres { width: 1%; white-space: nowrap; text-align: cente
   border-radius: 6px;
   font-size: 0.78rem;
 }
+
+/* ---------- watchlisty: zakładki i zarządzanie listami ---------- */
+.listy-pasek { margin-top: 14px; }
+.listy-zakladki {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+/* Zakładka to ODNOŚNIK, nie przycisk — każdą listę da się zapisać
+   w zakładkach przeglądarki i wysłać linkiem. */
+.zakladka {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 13px;
+  border-radius: 10px;
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--muted);
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+.zakladka:hover { color: var(--fg); border-color: var(--fg); }
+.zakladka.aktywna {
+  color: var(--k5-fg);
+  background: var(--k5-bg);
+  border-color: transparent;
+}
+.zakladka-ile {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--pill-bg);
+  color: var(--pill-fg);
+}
+.zakladka.aktywna .zakladka-ile { background: var(--surface); color: var(--k5-fg); }
+
+.listy-ustawienia { margin-top: 10px; }
+.listy-ustawienia summary {
+  cursor: pointer;
+  font-size: 0.78rem;
+  color: var(--muted);
+  width: fit-content;
+}
+.listy-ustawienia summary:hover { color: var(--fg); }
+.listy-formularze {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  align-items: flex-end;
+  margin-top: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.listy-formularze form { display: flex; gap: 8px; align-items: flex-end; }
+.listy-formularze label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 0.76rem;
+  color: var(--muted);
+}
+.listy-formularze input[type="text"] {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 7px 9px;
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--fg);
+}
+.listy-formularze input:focus-visible { outline: 2px solid var(--k5-fg); }
+.listy-formularze button {
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 8px 14px;
+  border-radius: 9px;
+  cursor: pointer;
+  background: var(--k5-bg);
+  color: var(--k5-fg);
+  border: 1px solid transparent;
+}
+.listy-formularze button:hover { border-color: var(--k5-fg); }
+.form-usun-liste {
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  gap: 6px !important;
+  flex: 1 1 260px;
+}
+.form-usun-liste button { background: transparent; }
+.form-usun-liste .drobne { margin: 0; max-width: 46ch; }
+
+/* Przeniesienie spółki na inną listę — pole wyboru i strzałka w jednej linii. */
+.form-przenies { display: flex; gap: 5px; align-items: center; }
+.form-przenies select {
+  font: inherit;
+  font-size: 0.8rem;
+  padding: 5px 7px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--fg);
+  max-width: 140px;
+}
+.form-przenies button {
+  font: inherit;
+  font-size: 0.82rem;
+  padding: 5px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--line);
+}
+.form-przenies button:hover { color: var(--k5-fg); border-color: var(--k5-fg); }
+
+/* ---------- moduł Globalny przegląd ---------- */
+.naglowek-sekcji {
+  margin: 0 0 4px;
+  font-size: 0.98rem;
+  font-weight: 800;
+  letter-spacing: -0.015em;
+}
+
+/* Dwie karty obok siebie na szerokim ekranie, jedna pod drugą na wąskim.
+   Bez media query — grid sam decyduje, kiedy się zwinąć. */
+.dwie-kolumny {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  align-items: start;
+}
+
+.tab-heatmapa td.t { font-weight: 600; }
+.tab-heatmapa th,
+.tab-heatmapa td { white-space: nowrap; }
+.tab-ruchy th,
+.tab-ruchy td { white-space: nowrap; }
+.drobna-kom { font-size: 0.8rem; color: var(--muted); }
+
+/* Histogram RSI rysowany słupkami z divów — bez biblioteki wykresów.
+   Dziesięć słupków nie jest warte kolejnej zależności do utrzymania. */
+.histogram {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  height: 170px;
+  margin-top: 14px;
+  padding-bottom: 2px;
+}
+.hist-slupek {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 4px;
+  height: 100%;
+}
+.hist-pasek {
+  width: 100%;
+  min-height: 2px;
+  border-radius: 5px 5px 0 0;
+  background: var(--k1-fg);
+  opacity: 0.75;
+}
+/* Skrajne przedziały niosą inne znaczenie niż środek, więc dostają własny
+   kolor: wyprzedanie i wykupienie to sygnały, a nie ozdoba. */
+.hist-pasek.wyprzedane { background: var(--good-fg); }
+.hist-pasek.wykupione { background: var(--down); }
+.hist-liczba {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.hist-etykieta {
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  color: var(--muted);
+}
+/* Gdy miary nie da się pokazać, kafelek mówi wprost, ile danych zabrakło. */
+.stats .podstawa {
+  display: block;
+  font-style: normal;
+  font-size: 0.68rem;
+  color: var(--muted);
+  margin-top: 2px;
+}

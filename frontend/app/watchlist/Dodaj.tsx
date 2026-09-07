@@ -13,13 +13,16 @@ import type { Instrument } from "@/lib/filtry";
 export default function DodajSpolke({
   instrumenty,
   powrot,
+  listaId,
 }: {
   instrumenty: Instrument[];
   powrot: string;
+  listaId: number;
 }) {
   return (
     <form action={dodaj} className="form-dodaj-obserwowana">
       <input type="hidden" name="powrot" value={powrot} />
+      <input type="hidden" name="lista" value={listaId} />
 
       <label>
         <span>Spółka lub ETF</span>

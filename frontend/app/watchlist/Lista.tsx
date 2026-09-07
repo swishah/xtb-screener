@@ -1,15 +1,15 @@
 import Link from "next/link";
-import { notatka as zapiszNotatke, usun } from "./akcje";
+import { notatka as zapiszNotatke, przeniesSpolke, usun } from "./akcje";
 import { liczba, type Instrument } from "@/lib/filtry";
-import { MAKS_NOTATKA, type Obserwowana } from "@/lib/obserwowane";
+import { MAKS_NOTATKA, type Lista, type Obserwowana } from "@/lib/obserwowane";
 
 /**
- * Lista obserwowanych spółek. Komponent SERWEROWY — edycja notatki
- * i usuwanie to zwykłe formularze z akcją serwerową, więc cała tabela
- * działa bez jednego bajtu JavaScriptu.
+ * Tabela obserwowanych spółek jednej listy. Komponent SERWEROWY — edycja
+ * notatki, przeniesienie i usunięcie to zwykłe formularze z akcją serwerową,
+ * więc całość działa bez jednego bajtu JavaScriptu.
  *
  * Notatkę zapisuje się per wiersz, a nie zbiorczym przyciskiem jak
- * w Streamlicie. Zbiorczy zapis wymaga trzymania stanu całej tabeli, a przy
+ * w Streamlicie. Zbiorczy zapis wymaga stanu całej tabeli, a przy
  * formularzach bez JS oznaczałby wysyłanie wszystkich notatek przy zmianie
  * jednej — i cichy nadpis, gdyby ktoś edytował z drugiego urządzenia.
  */
@@ -27,20 +27,26 @@ export default function ListaObserwowanych({
   pozycje,
   dane,
   powrot,
+  listaId,
+  listy,
 }: {
   pozycje: Obserwowana[];
   /** Wiersz z najnowszej migawki, po tickerze. Brak = spółka bez danych. */
   dane: Map<string, Instrument>;
   powrot: string;
+  listaId: number;
+  listy: Lista[];
 }) {
   if (pozycje.length === 0) {
     return (
       <p className="pusto">
-        Nie obserwujesz jeszcze żadnej spółki. Dodaj ją powyżej albo wejdź na
-        profil spółki i kliknij „Obserwuj”.
+        Ta lista jest pusta. Dodaj spółkę powyżej albo wejdź na profil spółki
+        i kliknij „Obserwuj”.
       </p>
     );
   }
+
+  const inne = listy.filter((l) => l.id !== listaId);
 
   return (
     <div className="scroll">
@@ -54,6 +60,7 @@ export default function ListaObserwowanych({
             <th className="r">Score</th>
             <th className="r">Flagi</th>
             <th>Notatka</th>
+            {inne.length > 0 && <th>Przenieś</th>}
             <th />
           </tr>
         </thead>
@@ -73,13 +80,14 @@ export default function ListaObserwowanych({
                 </td>
                 <td className="r n">{fmt(w?.["Cena"])}</td>
                 <td className="r n">{fmt(w?.["pct_from_ath"], 1, "%")}</td>
-                <td className="r n">{fmt(w?.["C/Z"], 1)}</td>
+                <td className="r n">{fmt(w?.["C/Z (P/E)"], 1)}</td>
                 <td className="r n">{fmt(w?.["Buy Score"], 0)}</td>
                 <td className="r n">{fmt(w?.["Liczba flag"], 0)}</td>
 
                 <td className="kol-notatka">
                   <form action={zapiszNotatke} className="form-notatka">
                     <input type="hidden" name="ticker" value={p.ticker} />
+                    <input type="hidden" name="lista" value={listaId} />
                     <input type="hidden" name="powrot" value={powrot} />
                     <input
                       type="text"
@@ -95,14 +103,39 @@ export default function ListaObserwowanych({
                   </form>
                 </td>
 
+                {inne.length > 0 && (
+                  <td>
+                    <form action={przeniesSpolke} className="form-przenies">
+                      <input type="hidden" name="ticker" value={p.ticker} />
+                      <input type="hidden" name="lista" value={listaId} />
+                      <input type="hidden" name="powrot" value={powrot} />
+                      <select
+                        name="naListe"
+                        aria-label={`Przenieś ${p.ticker} na inną listę`}
+                        defaultValue={inne[0].id}
+                      >
+                        {inne.map((l) => (
+                          <option key={l.id} value={l.id}>
+                            {l.nazwa}
+                          </option>
+                        ))}
+                      </select>
+                      <button type="submit" title="Przenieś na wybraną listę">
+                        →
+                      </button>
+                    </form>
+                  </td>
+                )}
+
                 <td className="r">
                   <form action={usun}>
                     <input type="hidden" name="ticker" value={p.ticker} />
+                    <input type="hidden" name="lista" value={listaId} />
                     <input type="hidden" name="powrot" value={powrot} />
                     <button
                       type="submit"
                       className="btn-usun"
-                      title={`Usuń ${p.ticker} z obserwowanych`}
+                      title={`Usuń ${p.ticker} z tej listy`}
                     >
                       Usuń
                     </button>

@@ -3,13 +3,15 @@ import Pasek from "../Pasek";
 import DodajSpolke from "./Dodaj";
 import Korelacje from "./Korelacje";
 import ListaObserwowanych from "./Lista";
+import Zakladki from "./Zakladki";
 import { przenies } from "./akcje";
 import { historiaCeny, migawkaBezpieczna } from "@/lib/dane";
 import type { Instrument } from "@/lib/filtry";
 import { macierzKorelacji, MAKS_SPOLEK, type Szereg } from "@/lib/korelacje";
 import {
   LIMIT_OBSERWOWANYCH,
-  obserwowaneUzytkownika,
+  listyUzytkownika,
+  obserwowaneZListy,
   staraWatchlista,
 } from "@/lib/obserwowane";
 import { wymagajZalogowania } from "@/lib/sesja";
@@ -23,20 +25,44 @@ function komunikat(kod: string | undefined): string | null {
     const ile = Number(kod.slice("przeniesiono-".length));
     if (!Number.isFinite(ile)) return null;
     return ile > 0
-      ? `Przeniesiono ${ile} ${ile === 1 ? "spółkę" : "spółek"} ze starej watchlisty.`
-      : "Nie było czego przenosić — wszystko już masz na liście.";
+      ? `Skopiowano ${ile} ${ile === 1 ? "spółkę" : "spółek"} ze starej watchlisty.`
+      : "Nie było czego kopiować — wszystko już masz na tej liście.";
   }
   const slownik: Record<string, string> = {
-    dodany: "Dodano do obserwowanych.",
-    usuniety: "Usunięto z obserwowanych.",
+    dodany: "Dodano do listy.",
+    usuniety: "Usunięto z listy.",
     notatka: "Zapisano notatkę.",
-    duplikat: "Ta spółka już jest na Twojej liście.",
-    limit: `Masz już maksymalną liczbę obserwowanych (${LIMIT_OBSERWOWANYCH}).`,
+    przeniesiona: "Przeniesiono na wybraną listę.",
+    jestJuzTam: "Ta spółka jest już na liście docelowej.",
+    duplikat: "Ta spółka już jest na tej liście.",
+    limit: `Masz już maksymalną liczbę obserwowanych spółek (${LIMIT_OBSERWOWANYCH}).`,
     nieznany: "Nie znam takiego tickera — wybierz spółkę z podpowiedzi.",
     brakTickera: "Nie podano tickera.",
+    "lista-dodana": "Utworzono nową listę.",
+    "lista-nazwa": "Zmieniono nazwę listy.",
+    "lista-usunieta": "Usunięto listę.",
+    "lista-duplikat": "Masz już listę o takiej nazwie.",
+    "lista-pustaNazwa": "Nazwa listy nie może być pusta.",
+    "lista-limit": "Osiągnięto maksymalną liczbę list.",
+    "lista-ostatnia": "To Twoja jedyna lista — nie da się jej usunąć.",
+    "lista-niepusta":
+      "Najpierw opróżnij listę. Kasowanie razem z zawartością wymagałoby potwierdzenia, którego bez JavaScriptu nie ma.",
   };
   return slownik[kod] ?? null;
 }
+
+const BLEDY = new Set([
+  "duplikat",
+  "limit",
+  "nieznany",
+  "brakTickera",
+  "jestJuzTam",
+  "lista-duplikat",
+  "lista-pustaNazwa",
+  "lista-limit",
+  "lista-ostatnia",
+  "lista-niepusta",
+]);
 
 export default async function Watchlist({
   searchParams,
@@ -51,14 +77,21 @@ export default async function Watchlist({
   };
 
   const { instrumenty, data, tryb } = await migawkaBezpieczna();
-  const pozycje = await obserwowaneUzytkownika(uzytkownik.id);
+  const listy = await listyUzytkownika(uzytkownik.id);
+
+  // Wybrana lista z adresu; przy śmieciach albo cudzym id wracamy na pierwszą.
+  const zadana = Number(jeden("lista"));
+  const aktywna = listy.some((l) => l.id === zadana) ? zadana : listy[0].id;
+  const powrot = `/watchlist?lista=${aktywna}`;
+
+  const pozycje = await obserwowaneZListy(uzytkownik.id, aktywna);
   const dane = new Map<string, Instrument>(
     instrumenty.map((i) => [String(i.Ticker), i]),
   );
 
   // Stara, wspólna watchlist ze Streamlita. Pytamy o nią tylko po to, żeby
-  // pokazać przycisk przeniesienia — i tylko wtedy, gdy jest w niej coś,
-  // czego użytkownik jeszcze nie ma.
+  // pokazać przycisk — i tylko wtedy, gdy jest w niej coś, czego na TEJ
+  // liście jeszcze nie ma.
   const stare = await staraWatchlista();
   const doPrzeniesienia = stare.filter(
     (s) => !pozycje.some((p) => p.ticker === s.ticker),
@@ -67,9 +100,7 @@ export default async function Watchlist({
   const bezDanych = pozycje.filter((p) => !dane.has(p.ticker)).length;
   const kod = jeden("wl");
   const info = komunikat(kod);
-  const toBlad = kod
-    ? ["duplikat", "limit", "nieznany", "brakTickera"].includes(kod)
-    : false;
+  const lacznie = listy.reduce((s, l) => s + l.ile, 0);
 
   // Korelacje liczymy WYŁĄCZNIE na żądanie — to jedno zapytanie do bazy
   // na każdą obserwowaną spółkę.
@@ -93,10 +124,10 @@ export default async function Watchlist({
       <Pasek dataMigawki={data} tryb={tryb} />
 
       <div className="cardhead" style={{ padding: "18px 0 4px" }}>
-        <h2 style={{ fontSize: "1.15rem" }}>Watchlist</h2>
+        <h2 style={{ fontSize: "1.15rem" }}>Watchlisty</h2>
         <em>
-          {pozycje.length}{" "}
-          {pozycje.length === 1 ? "obserwowana spółka" : "obserwowanych"}
+          {listy.length} {listy.length === 1 ? "lista" : "listy"} · {lacznie}{" "}
+          {lacznie === 1 ? "spółka" : "spółek"} łącznie
         </em>
         <Link className="link" href="/">
           ← Wróć na pulpit
@@ -104,39 +135,48 @@ export default async function Watchlist({
       </div>
 
       {info && (
-        <p className={toBlad ? "komunikat-blad" : "komunikat-info"}>{info}</p>
+        <p className={kod && BLEDY.has(kod) ? "komunikat-blad" : "komunikat-info"}>
+          {info}
+        </p>
       )}
+
+      <Zakladki listy={listy} aktywna={aktywna} powrot={powrot} />
 
       {doPrzeniesienia > 0 && (
         <form action={przenies} className="card pasek-przeniesienia">
-          <input type="hidden" name="powrot" value="/watchlist" />
+          <input type="hidden" name="powrot" value={powrot} />
+          <input type="hidden" name="lista" value={aktywna} />
           <span>
             W starej, wspólnej watchliście ze Streamlita jest{" "}
             <b>{doPrzeniesienia}</b>{" "}
-            {doPrzeniesienia === 1 ? "spółka" : "spółek"}, których nie masz na
-            swojej liście. Stara lista pozostanie nietknięta — kopiujemy, nie
+            {doPrzeniesienia === 1 ? "spółka" : "spółek"}, których nie ma na tej
+            liście. Stara lista pozostanie nietknięta — kopiujemy, nie
             przenosimy.
           </span>
-          <button type="submit">Skopiuj na moje konto</button>
+          <button type="submit">Skopiuj na tę listę</button>
         </form>
       )}
 
       <div className="card" style={{ marginTop: 12, padding: "14px 20px" }}>
-        <DodajSpolke instrumenty={instrumenty} powrot="/watchlist" />
+        <DodajSpolke
+          instrumenty={instrumenty}
+          powrot={powrot}
+          listaId={aktywna}
+        />
       </div>
 
       <div className="card" style={{ marginTop: 12, padding: "4px 20px 12px" }}>
         <ListaObserwowanych
           pozycje={pozycje}
           dane={dane}
-          powrot="/watchlist"
+          powrot={powrot}
+          listaId={aktywna}
+          listy={listy}
         />
         {bezDanych > 0 && (
           <p className="drobne">
             {bezDanych}{" "}
-            {bezDanych === 1
-              ? "spółka nie ma danych"
-              : "spółek nie ma danych"}{" "}
+            {bezDanych === 1 ? "spółka nie ma danych" : "spółek nie ma danych"}{" "}
             w najnowszej migawce (np. dodane po ostatnim skanie albo usunięte
             z uniwersum) — liczby pojawią się po kolejnym skanie.
           </p>
@@ -145,14 +185,14 @@ export default async function Watchlist({
 
       <div className="cardhead" style={{ padding: "18px 0 4px" }}>
         <h2 style={{ fontSize: "1.05rem" }}>Korelacje</h2>
-        <em>czy to nie jest jeden zakład w kilku opakowaniach</em>
+        <em>czy ta lista to nie jeden zakład w kilku opakowaniach</em>
         {pozycje.length >= 2 && !chceKorelacje && (
-          <Link className="link" href="/watchlist?korelacje=1">
+          <Link className="link" href={`${powrot}&korelacje=1`}>
             Policz →
           </Link>
         )}
         {chceKorelacje && (
-          <Link className="link" href="/watchlist">
+          <Link className="link" href={powrot}>
             Ukryj
           </Link>
         )}
@@ -163,7 +203,7 @@ export default async function Watchlist({
           <Korelacje macierz={macierz} pominieto={pominieto} />
         ) : (
           <p className="pusto">
-            Kliknij „Policz”, żeby sprawdzić, czy obserwowane spółki nie
+            Kliknij „Policz”, żeby sprawdzić, czy spółki z tej listy nie
             poruszają się razem. Liczone na żądanie, bo wymaga sięgnięcia po
             historię cen każdej z nich.
           </p>
@@ -171,11 +211,12 @@ export default async function Watchlist({
       </div>
 
       <footer>
-        Watchlist jest przypisana do Twojego konta — każdy użytkownik ma swoją.
-        Dane liczbowe pochodzą z najnowszej migawki ({data}), więc zmieniają
-        się po każdym skanie; notatki są Twoje i nic ich nie nadpisuje. Limit
-        na konto: {LIMIT_OBSERWOWANYCH} spółek. Alarm cenowy na obserwowaną
-        spółkę ustawisz na jej profilu.
+        Listy są przypisane do Twojego konta — każdy użytkownik ma swoje. Ta
+        sama spółka może być na kilku listach naraz, z osobną notatką na każdej;
+        „Dywidendowe” i „Kupione” to dwa różne powody obserwowania. Dane liczbowe
+        pochodzą z najnowszej migawki ({data}) i zmieniają się po każdym skanie;
+        notatki są Twoje i nic ich nie nadpisuje. Limit: {LIMIT_OBSERWOWANYCH}{" "}
+        spółek łącznie na konto. Alarm cenowy ustawisz na profilu spółki.
       </footer>
     </main>
   );
