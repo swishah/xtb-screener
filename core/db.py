@@ -75,6 +75,50 @@ SCHEMA_STATEMENTS = [
         dodano TEXT NOT NULL
     )
     """,
+    # Dossier kandydatów do planu dnia: policzone poziomy techniczne plus
+    # kontekst z migawki. Ten sam kształt co `snapshots` (dzień + ticker +
+    # payload), bo problem jest ten sam: jeden wiersz na instrument na dzień,
+    # o zmiennym zestawie pól.
+    """
+    CREATE TABLE IF NOT EXISTS dossier (
+        dzien TEXT NOT NULL,
+        ticker TEXT NOT NULL,
+        payload TEXT NOT NULL,
+        PRIMARY KEY (dzien, ticker)
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_dossier_dzien ON dossier(dzien)",
+    # Plany wejścia. Kolumny są ROZPISANE, a nie schowane w payloadzie, bo
+    # codzienny skan musi po nich filtrować i je aktualizować — a to znaczy
+    # zapytania po `stan` i po cenach, nie przemiatanie JSON-a.
+    """
+    CREATE TABLE IF NOT EXISTS plany (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        dzien TEXT NOT NULL,
+        ticker TEXT NOT NULL,
+        kierunek TEXT NOT NULL DEFAULT 'long',
+        teza TEXT NOT NULL DEFAULT '',
+        wejscie_od REAL NOT NULL,
+        wejscie_do REAL NOT NULL,
+        sl REAL NOT NULL,
+        sl_poziom TEXT NOT NULL DEFAULT '',
+        tp1 REAL NOT NULL,
+        tp2 REAL,
+        rr REAL,
+        pewnosc INTEGER,
+        horyzont_sesji INTEGER NOT NULL DEFAULT 10,
+        zrodla TEXT NOT NULL DEFAULT '',
+        uwagi TEXT NOT NULL DEFAULT '',
+        stan TEXT NOT NULL DEFAULT 'czeka',
+        data_wejscia TEXT,
+        data_zamkniecia TEXT,
+        cena_zamkniecia REAL,
+        wynik_r REAL,
+        sesji_minelo INTEGER NOT NULL DEFAULT 0
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_plany_stan ON plany(stan)",
+    "CREATE INDEX IF NOT EXISTS idx_plany_dzien ON plany(dzien)",
 ]
 
 
@@ -396,3 +440,183 @@ def wlasne_instrumenty() -> list[dict]:
 def wlasne_wg_typu(typ: str) -> dict[str, str]:
     """Mapa {ticker: nazwa} dla jednego typu — w formacie, którego oczekuje skan."""
     return {i["ticker"]: i["nazwa"] for i in wlasne_instrumenty() if i["typ"] == typ}
+
+
+# ---------------------------------------------------------------------------
+# Dossier kandydatów do planu dnia
+# ---------------------------------------------------------------------------
+
+def zapisz_dossier(dzien: str, wpisy: list[dict]) -> int:
+    """
+    Zapisuje dossier na dany dzień. Zwraca liczbę zapisanych wpisów.
+
+    Wiersza, którego nie da się zserializować do POPRAWNEGO JSON-a, nie
+    zapisujemy — dokładnie tak samo jak przy migawkach. `allow_nan=False`
+    jest tu celowe: gołe `NaN` przechodzi przez `json.loads` w Pythonie,
+    ale wywraca `JSON.parse` w przeglądarce, więc frontend zobaczyłby pustkę
+    zamiast dossier.
+    """
+    conn = get_conn()
+    zapisane = 0
+    try:
+        for wpis in wpisy:
+            try:
+                payload = json.dumps(_bez_nan(wpis), default=str, allow_nan=False)
+            except (ValueError, TypeError) as e:  # noqa: PERF203
+                print(f"⚠️ Dossier: pomijam {wpis.get('ticker', '?')} ({e}).")
+                continue
+            conn.execute(
+                "INSERT OR REPLACE INTO dossier (dzien, ticker, payload) "
+                "VALUES (?, ?, ?)",
+                (dzien, str(wpis["ticker"]), payload),
+            )
+            zapisane += 1
+        _zatwierdz(conn)
+    finally:
+        _zamknij(conn)
+    return zapisane
+
+
+def dni_dossier() -> list[str]:
+    """Dni, na które istnieje dossier — od najnowszego."""
+    conn = get_conn()
+    try:
+        wiersze = conn.execute(
+            "SELECT DISTINCT dzien FROM dossier ORDER BY dzien DESC"
+        ).fetchall()
+    finally:
+        _zamknij(conn)
+    return [w[0] for w in wiersze]
+
+
+def wczytaj_dossier(dzien: str | None = None) -> list[dict]:
+    """Dossier z podanego dnia; bez argumentu — najnowsze."""
+    dni = dni_dossier()
+    if not dni:
+        return []
+    wybrany = dzien or dni[0]
+    conn = get_conn()
+    try:
+        wiersze = conn.execute(
+            "SELECT payload FROM dossier WHERE dzien = ?", (wybrany,)
+        ).fetchall()
+    finally:
+        _zamknij(conn)
+    wynik = []
+    for (payload,) in wiersze:
+        try:
+            wynik.append(json.loads(payload))
+        except json.JSONDecodeError:
+            continue
+    return wynik
+
+
+# ---------------------------------------------------------------------------
+# Plany wejścia
+# ---------------------------------------------------------------------------
+
+_POLA_PLANU = (
+    "dzien", "ticker", "kierunek", "teza", "wejscie_od", "wejscie_do", "sl",
+    "sl_poziom", "tp1", "tp2", "rr", "pewnosc", "horyzont_sesji", "zrodla",
+    "uwagi",
+)
+
+
+def zapisz_plan(plan: dict) -> None:
+    """Dopisuje jeden plan. Stan początkowy zawsze `czeka`."""
+    conn = get_conn()
+    try:
+        wartosci = [plan.get(k) for k in _POLA_PLANU]
+        conn.execute(
+            f"INSERT INTO plany ({', '.join(_POLA_PLANU)}) "
+            f"VALUES ({', '.join('?' * len(_POLA_PLANU))})",
+            wartosci,
+        )
+        _zatwierdz(conn)
+    finally:
+        _zamknij(conn)
+
+
+def _plan_z_wiersza(w) -> dict:
+    kolumny = (
+        "id", "dzien", "ticker", "kierunek", "teza", "wejscie_od", "wejscie_do",
+        "sl", "sl_poziom", "tp1", "tp2", "rr", "pewnosc", "horyzont_sesji",
+        "zrodla", "uwagi", "stan", "data_wejscia", "data_zamkniecia",
+        "cena_zamkniecia", "wynik_r", "sesji_minelo",
+    )
+    return dict(zip(kolumny, w))
+
+
+_WYBOR_PLANU = (
+    "SELECT id, dzien, ticker, kierunek, teza, wejscie_od, wejscie_do, sl, "
+    "sl_poziom, tp1, tp2, rr, pewnosc, horyzont_sesji, zrodla, uwagi, stan, "
+    "data_wejscia, data_zamkniecia, cena_zamkniecia, wynik_r, sesji_minelo "
+    "FROM plany"
+)
+
+
+def plany_otwarte() -> list[dict]:
+    """Plany, które codzienny skan ma jeszcze rozliczać."""
+    conn = get_conn()
+    try:
+        wiersze = conn.execute(
+            _WYBOR_PLANU + " WHERE stan IN ('czeka', 'aktywny') ORDER BY id"
+        ).fetchall()
+    finally:
+        _zamknij(conn)
+    return [_plan_z_wiersza(w) for w in wiersze]
+
+
+def plany_dnia(dzien: str | None = None) -> list[dict]:
+    """Plany z danego dnia; bez argumentu — z najnowszego, który ma plany."""
+    conn = get_conn()
+    try:
+        if dzien is None:
+            wiersz = conn.execute(
+                "SELECT dzien FROM plany ORDER BY dzien DESC LIMIT 1"
+            ).fetchone()
+            if not wiersz:
+                return []
+            dzien = wiersz[0]
+        wiersze = conn.execute(
+            _WYBOR_PLANU + " WHERE dzien = ? ORDER BY pewnosc DESC, rr DESC, id",
+            (dzien,),
+        ).fetchall()
+    finally:
+        _zamknij(conn)
+    return [_plan_z_wiersza(w) for w in wiersze]
+
+
+def aktualizuj_plan(plan_id: int, **pola) -> None:
+    """
+    Zmienia wskazane kolumny jednego planu.
+
+    Biała lista obejmuje WYŁĄCZNIE pola rozliczeniowe. Poziomów wejścia, stopa
+    i celów nie da się tędy ruszyć i tak ma być: plan po zapisaniu jest
+    świadectwem tego, co się myślało tamtego dnia. Gdyby dało się je poprawiać,
+    statystyka skuteczności przestałaby cokolwiek znaczyć.
+
+    Pole spoza listy jest BŁĘDEM, a nie cichym pominięciem — literówka
+    w nazwie kolumny inaczej znikałaby bez śladu.
+    """
+    if not pola:
+        return
+    dozwolone = {
+        "stan", "data_wejscia", "data_zamkniecia", "cena_zamkniecia",
+        "wynik_r", "sesji_minelo", "uwagi",
+    }
+    nieznane = set(pola) - dozwolone
+    if nieznane:
+        raise ValueError(f"aktualizuj_plan: nieznane pola {sorted(nieznane)}")
+    zmiany = dict(pola)
+    if not zmiany:
+        return
+    conn = get_conn()
+    try:
+        conn.execute(
+            f"UPDATE plany SET {', '.join(f'{k} = ?' for k in zmiany)} WHERE id = ?",
+            [*zmiany.values(), plan_id],
+        )
+        _zatwierdz(conn)
+    finally:
+        _zamknij(conn)

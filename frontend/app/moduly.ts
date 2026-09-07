@@ -60,6 +60,7 @@ export const KATEGORIE: Kategoria[] = [
     etykieta: "Moje",
     klasa: "k5",
     moduly: [
+      { nazwa: "Plan dnia", opis: "Wejście, stop, cel", sciezka: "/plan" },
       { nazwa: "Alarmy cenowe", opis: "Progi na wykresie", sciezka: "/alarmy" },
       { nazwa: "Watchlisty", opis: "Kilka list z notatkami", sciezka: "/watchlist" },
       { nazwa: "Analiza transakcji", opis: "Import z XTB", sciezka: "/transakcje" },

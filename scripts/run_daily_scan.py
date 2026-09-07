@@ -28,6 +28,7 @@ from core.rewizje import kandydaci_odniesienia, ma_dane_odniesienia  # noqa: E40
 from core import alarmy as alarmy_mod  # noqa: E402
 from core import shorty as shorty_mod  # noqa: E402
 from core import db as db_mod  # noqa: E402
+from core import plany as plany_mod  # noqa: E402
 
 
 
@@ -234,6 +235,28 @@ def _sprawdz_alarmy(rows: list[dict]) -> None:
 
 
 
+def _rozlicz_plany(rows: list[dict], dzien: str) -> None:
+    """
+    Posuwa otwarte plany wejścia o jedną sesję.
+
+    Chodzi PO zapisaniu migawki, bo rozliczenie korzysta z tych samych
+    wierszy — zero dodatkowych zapytań do sieci. Brak planów albo brak tabeli
+    nie jest błędem: znaczy tyle, że nikt jeszcze żadnego nie wystawił.
+    """
+    try:
+        zdarzenia = plany_mod.rozlicz(rows, dzien)
+    except Exception as e:  # noqa: BLE001
+        print(f"⚠️ Plany: rozliczanie nie powiodło się ({type(e).__name__}) — pomijam.")
+        return
+    if not zdarzenia:
+        return
+    print(f"📋 Plany — zmiany stanu ({len(zdarzenia)}):")
+    for z in zdarzenia:
+        wynik = f", wynik {z['wynik_r']}R" if z["wynik_r"] is not None else ""
+        uwaga = f" [{z['uwagi']}]" if z["uwagi"] else ""
+        print(f"   • {z['ticker']}: {z['z']} → {z['na']}{wynik}{uwaga}")
+
+
 def _uzupelnij_shorty(rows: list[dict]) -> None:
     """
     Dokłada krótkie pozycje z europejskich rejestrów nadzorów.
@@ -316,6 +339,7 @@ def main() -> None:
     print(f"💾 Zapisuję migawkę {today}: {len(all_rows)} instrumentów.")
     save_snapshot(today, all_rows)
     _sprawdz_alarmy(all_rows)
+    _rozlicz_plany(all_rows, today)
 
     today_df = pd.DataFrame(all_rows)
     check_top10_newcomers(STRATEGIES, today_df, prev_df)

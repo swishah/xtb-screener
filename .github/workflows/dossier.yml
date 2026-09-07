@@ -1,0 +1,89 @@
+name: Dossier kandydatow
+
+on:
+  schedule:
+    # DWA WPISY NA JEDNO URUCHOMIENIE — i to jest celowe.
+    #
+    # Cron w GitHub Actions chodzi WYŁĄCZNIE w UTC i nie zna czasu letniego,
+    # a "6:00" ma znaczyć szóstą w Polsce przez cały rok. Szósta w Warszawie
+    # to 04:00 UTC latem (CEST, +2) i 05:00 UTC zimą (CET, +1). Dlatego
+    # wpisujemy oba terminy, a krok "Czy to ta godzina" przepuszcza tylko
+    # właściwy: ten drugi widzi, że dossier na dziś już jest, i kończy.
+    #
+    # Rozwiązanie przez samą godzinę byłoby kruche, bo zadania z harmonogramu
+    # bywają u GitHuba opóźnione o kilkanaście minut — sprawdzenie stanu bazy
+    # jest odporne na opóźnienie, sprawdzenie zegara nie.
+    - cron: "0 4 * * 1-5"
+    - cron: "0 5 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      wymus:
+        description: "Policz dossier nawet, jeśli na dziś już istnieje"
+        type: boolean
+        default: false
+
+jobs:
+  dossier:
+    runs-on: ubuntu-latest
+    env:
+      TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+      TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Instalacja zaleznosci
+        run: pip install -r requirements.txt
+
+      - name: Czy to ta godzina
+        id: brama
+        run: |
+          set -euo pipefail
+
+          # Bez bazy zdalnej dossier pisaloby na dysk maszyny, ktory po
+          # zakonczeniu zadania znika — czyli caly przebieg poszedlby w kosz.
+          # Skan ma na ten wypadek commitowanie pliku do repo; tutaj tego
+          # NIE robimy, bo dossier jest codzienne i szybko by repo zapchalo.
+          if [ -z "${TURSO_DATABASE_URL:-}" ]; then
+            echo "Brak sekretu TURSO_DATABASE_URL — dossier nie mialoby gdzie"
+            echo "trwale wyladowac. Koncze bez liczenia."
+            echo "licz=nie" >> "$GITHUB_OUTPUT"
+            echo "dzien=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          godzina=$(TZ=Europe/Warsaw date +%H)
+          dzis=$(TZ=Europe/Warsaw date +%F)
+          echo "W Warszawie jest $godzina:00, dzien $dzis."
+          echo "dzien=$dzis" >> "$GITHUB_OUTPUT"
+
+          if [ "${{ inputs.wymus }}" = "true" ]; then
+            echo "Wymuszone recznie — licze."
+            echo "licz=tak" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Przed szosta to ten wczesniejszy z dwoch terminow, trafiony w zla
+          # pore roku. Nie liczymy — za godzine odpali ten wlasciwy.
+          if [ "$godzina" -lt 6 ]; then
+            echo "Za wczesnie na plan dnia — koncze."
+            echo "licz=nie" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Jedna linia celowo: `python -c` z wcieciem w zrodle konczy sie
+          # bledem wciecia, a w kroku YAML kazda linia jest wciagnieta.
+          if python -c "import sys; from core import db; sys.exit(0 if '$dzis' in db.dni_dossier() else 1)"; then
+            echo "Dossier na $dzis juz jest — koncze."
+            echo "licz=nie" >> "$GITHUB_OUTPUT"
+          else
+            echo "Brak dossier na $dzis — licze."
+            echo "licz=tak" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Przygotowanie dossier
+        if: steps.brama.outputs.licz == 'tak'
+        run: python scripts/przygotuj_dossier.py --dzien "${{ steps.brama.outputs.dzien }}"

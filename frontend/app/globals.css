@@ -1709,3 +1709,103 @@ th.kol-wykres, td.kol-wykres { width: 1%; white-space: nowrap; text-align: cente
 .form-instrument button:hover { border-color: var(--k5-fg); }
 .form-instrument .drobne { flex: 1 1 100%; margin: 0; }
 .tab-instrumenty th, .tab-instrumenty td { white-space: nowrap; }
+
+/* =============================================================================
+   PLAN DNIA
+   Karty zamiast tabeli, bo plan to nie wiersz danych, tylko kilka liczb, które
+   trzeba przeczytać razem: strefa, stop i cel znaczą coś wyłącznie wobec
+   siebie nawzajem. Kolor kategorii „Moje" (k5), bo to jest moduł osobisty.
+   ========================================================================== */
+.plany { display: grid; gap: 12px; margin-top: 14px; }
+.plan { padding: 14px 16px 12px; }
+
+.plan-glowa {
+  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+.plan-ticker {
+  font-weight: 800; font-size: 1.02rem; letter-spacing: -0.015em; color: var(--fg);
+}
+.plan-ticker:hover { color: var(--accent); }
+.plan-nazwa { font-size: 0.82rem; color: var(--muted); margin-left: 8px; }
+
+.plan-teza {
+  margin: 0 0 10px; font-size: 0.9rem; line-height: 1.45; max-width: 78ch;
+}
+
+.plan-poziomy {
+  display: flex; flex-wrap: wrap; gap: 8px 26px;
+  padding: 10px 0 11px; border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.plan-poz { display: flex; flex-direction: column; gap: 2px; }
+.plan-poz > span {
+  font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.07em;
+  color: var(--muted);
+}
+.plan-poz strong {
+  font-family: var(--mono); font-variant-numeric: tabular-nums;
+  font-size: 0.98rem; font-weight: 600;
+}
+.plan-poz em {
+  font-style: normal; font-size: 0.7rem; color: var(--muted);
+  font-family: var(--mono);
+}
+
+/* Pełne kropki na tle bladych — pewność czyta się jednym spojrzeniem,
+   a liczba „4/5" wymaga przeczytania. */
+.pewnosc { font-size: 0.82rem; letter-spacing: 2px; color: var(--k5-fg); }
+.pewnosc-puste { opacity: 0.22; }
+
+.plan-stopka {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px;
+  padding-top: 9px; font-size: 0.79rem; color: var(--muted);
+}
+.plan-stopka b { color: var(--fg); font-family: var(--mono); }
+.plan-zrodla { font-size: 0.76rem; }
+.plan-anuluj { margin-left: auto; }
+.plan-anuluj button {
+  font: inherit; font-size: 0.76rem; padding: 5px 12px; border-radius: 8px;
+  cursor: pointer; background: transparent; color: var(--muted);
+  border: 1px solid var(--line);
+}
+.plan-anuluj button:hover { color: var(--down); border-color: var(--down); }
+.plan-anuluj button:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+
+.plan-uwagi {
+  margin: 9px 0 0; padding-left: 18px; font-size: 0.8rem; color: var(--muted);
+}
+.plan-uwagi li { margin-bottom: 3px; }
+
+.stan-pill {
+  display: inline-block; font-size: 0.72rem; font-weight: 600;
+  padding: 3px 9px; border-radius: 999px; white-space: nowrap;
+  background: var(--pill-bg); color: var(--pill-fg);
+}
+.stan-aktywny { background: var(--k5-bg); color: var(--k5-fg); }
+.stan-tp1, .stan-tp2 { background: var(--good-bg); color: var(--good-fg); }
+.stan-sl { background: rgba(192, 57, 46, 0.14); color: var(--down); }
+.stan-wygasl, .stan-anulowany { opacity: 0.75; }
+
+.tab-plany th, .tab-plany td { white-space: nowrap; }
+
+@media (max-width: 720px) {
+  .plan-glowa { gap: 6px; }
+  .plan-nazwa { margin-left: 0; flex-basis: 100%; }
+  .plan-poziomy { gap: 10px 20px; }
+  .plan-anuluj { margin-left: 0; flex-basis: 100%; }
+
+  .tab-plany tbody tr {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 9px 14px; padding: 14px 16px 15px;
+  }
+  .tab-plany td { text-align: left; font-size: 0.92rem; }
+  .tab-plany td.t { grid-column: 1 / -1; font-size: 1.05rem; }
+  .tab-plany td.r { text-align: left; }
+  .tab-plany td[data-l]::before {
+    content: attr(data-l);
+    display: block;
+    font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--muted); margin-bottom: 2px;
+  }
+}
