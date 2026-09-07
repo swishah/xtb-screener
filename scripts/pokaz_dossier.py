@@ -140,7 +140,19 @@ def main() -> None:
                         help="Surowy JSON zamiast tekstu.")
     parser.add_argument("--dni", action="store_true",
                         help="Wypisz tylko dni, na które istnieje dossier.")
+    parser.add_argument("--tryb", action="store_true",
+                        help="Wypisz tryb pracy bazy (zdalny/lokalny) i zakończ.")
     args = parser.parse_args()
+
+    # TRYB BAZY JAKO FLAGA TEGO SKRYPTU, A NIE OSOBNE `python -c`.
+    # Powód jest praktyczny: `python -c "from core import db"` działa wyłącznie
+    # z katalogu projektu jako roboczego, więc nie da się go zapisać jako
+    # zwykłe wywołanie ścieżką bezwzględną — a zadanie cykliczne uruchamia się
+    # z katalogu, którego nie kontrolujemy. Tak sprawdzenie trybu jest tym
+    # samym poleceniem co reszta i mieści się w tej samej regule uprawnień.
+    if args.tryb:
+        print(db.tryb())
+        return
 
     if args.dni:
         for d in db.dni_dossier():

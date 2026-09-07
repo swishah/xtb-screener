@@ -29,8 +29,14 @@ chronić — i będzie widoczne dopiero wtedy, gdy zabierze prawdziwe pieniądze
 ## Krok 0: sprawdź, na jakiej bazie pracujesz
 
 ```bash
-python -c "from core import db; print(db.tryb())"
+python scripts/pokaz_dossier.py --tryb
 ```
+
+**Na Windowsie wołaj `py`, nie `python`** — `python` na PATH bywa zaślepką ze
+Sklepu Windows, która nic nie uruchamia i wypisuje zachętę do instalacji.
+Skrypty działają wywołane ścieżką bezwzględną z dowolnego katalogu, więc
+`py "<ścieżka do repo>/scripts/pokaz_dossier.py" --tryb` jest bezpieczniejsze
+niż poleganie na katalogu roboczym.
 
 Jeżeli wyjdzie `lokalny`, **przerwij i powiedz o tym użytkownikowi**. Bez
 zmiennych `TURSO_DATABASE_URL` i `TURSO_AUTH_TOKEN` wszystko idzie do
