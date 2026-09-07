@@ -1603,3 +1603,109 @@ th.kol-wykres, td.kol-wykres { width: 1%; white-space: nowrap; text-align: cente
 .tab-transakcje th, .tab-transakcje td,
 .tab-mapa th, .tab-mapa td { white-space: nowrap; }
 .tab-transakcje td.t small { display: block; font-weight: 400; }
+
+/* ---------- wykresy liniowe (backtest, historia spółki) ---------- */
+.krzywa { width: 100%; min-width: 520px; height: auto; }
+.krzywa-linia { fill: none; stroke: var(--k2-fg); stroke-width: 2; }
+.krzywa-linia.spadek { stroke: var(--down); }
+/* Druga seria ma inny kolor I linię przerywaną — sam kolor gubi się przy
+   nakładających się przebiegach, a wydruk bywa czarno-biały. */
+.krzywa-linia.druga {
+  stroke: var(--k3-fg);
+  stroke-dasharray: 5 4;
+  stroke-width: 1.6;
+}
+.krzywa-zero { stroke: var(--line); stroke-width: 1; stroke-dasharray: 3 3; }
+.krzywa-opis {
+  font-family: var(--mono);
+  font-size: 10px;
+  fill: var(--muted);
+}
+.krzywa-opis.druga { fill: var(--k3-fg); }
+.tab-historia th, .tab-historia td { white-space: nowrap; }
+
+/* ---------- Dashboard ---------- */
+.kafelki-dashboard {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  margin-top: 14px;
+  align-items: start;
+}
+.kafel { margin-top: 0; padding: 14px 18px; }
+.histogram.maly { height: 110px; gap: 4px; }
+.histogram.maly .hist-liczba { display: none; }
+
+.pasek-wiersz {
+  display: grid;
+  grid-template-columns: 1fr 90px 44px;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0;
+  font-size: 0.8rem;
+}
+.pasek-etykieta { color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
+.pasek-tlo {
+  height: 8px;
+  border-radius: 5px;
+  background: var(--pill-bg);
+  overflow: hidden;
+}
+.pasek-wypelnienie { height: 100%; background: var(--k1-fg); border-radius: 5px; }
+.pasek-wartosc { text-align: right; font-size: 0.78rem; color: var(--muted); }
+
+.lista-kafel { list-style: none; margin: 6px 0 0; padding: 0; }
+.lista-kafel li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--line-2);
+}
+.lista-kafel li:last-child { border-bottom: 0; }
+.lista-kafel b { font-family: var(--mono); font-size: 0.85rem; }
+
+/* ---------- Własne instrumenty ---------- */
+.form-instrument {
+  margin-top: 14px;
+  padding: 16px 20px;
+  display: flex;
+  gap: 14px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+.form-instrument label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 0.78rem;
+  color: var(--muted);
+  flex: 1 1 260px;
+}
+.form-instrument input[type="text"],
+.form-instrument select {
+  font: inherit;
+  font-size: 0.86rem;
+  padding: 8px 10px;
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--fg);
+}
+.form-instrument input:focus-visible,
+.form-instrument select:focus-visible { outline: 2px solid var(--k5-fg); }
+.form-instrument button {
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.86rem;
+  padding: 9px 18px;
+  border-radius: 9px;
+  cursor: pointer;
+  background: var(--k5-bg);
+  color: var(--k5-fg);
+  border: 1px solid transparent;
+}
+.form-instrument button:hover { border-color: var(--k5-fg); }
+.form-instrument .drobne { flex: 1 1 100%; margin: 0; }
+.tab-instrumenty th, .tab-instrumenty td { white-space: nowrap; }

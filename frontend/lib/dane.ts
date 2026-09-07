@@ -186,6 +186,29 @@ export async function migawka(dzien?: string): Promise<Migawka> {
 }
 
 /**
+ * Pełna historia JEDNEJ spółki: po jednym wierszu migawki na dzień skanu.
+ *
+ * Inaczej niż `historiaCeny()`, która zwraca samą cenę — tutaj potrzebny jest
+ * CAŁY wiersz, bo moduł „Backtest spółki" pokazuje, jak wyglądały wszystkie
+ * wskaźniki w wybranym dniu. Lustro `load_ticker_history()` z `core/db.py`.
+ */
+export async function historiaSpolki(
+  ticker: string,
+): Promise<{ dzien: string; wiersz: Instrument }[]> {
+  const wynik = await klient().execute({
+    sql: `SELECT scan_date, payload FROM snapshots
+          WHERE ticker = ? ORDER BY scan_date`,
+    args: [ticker],
+  });
+  const out: { dzien: string; wiersz: Instrument }[] = [];
+  for (const w of wynik.rows) {
+    const rekord = parsujPayload(String(w.payload));
+    if (rekord) out.push({ dzien: String(w.scan_date), wiersz: rekord });
+  }
+  return out;
+}
+
+/**
  * Wszystkie migawki naraz, pogrupowane po dacie — wyłącznie do backtestów.
  *
  * To jedyne zapytanie w projekcie, które czyta całą tabelę (dziesiątki tysięcy

@@ -1760,7 +1760,22 @@ def backtest_strategy(df_all: pd.DataFrame, score_col: str, top_n: int, hold_sna
         entry_df = stocks[stocks["scan_date"] == entry_date].dropna(subset=[score_col])
         if entry_df.empty:
             continue
-        picks = entry_df.sort_values(score_col, ascending=False).head(top_n)
+        # REMISY ROZSTRZYGAMY JAWNIE, tak samo jak w rankingach we frontendzie
+        # (mniej flag → wyższy Buy Score → ticker alfabetycznie). Wyniki
+        # strategii są całkowite i niskie, więc przy TOP 5 remisuje zwykle
+        # kilkanaście spółek — bez tej reguły o składzie „portfela" decydowała
+        # kolejność wierszy w DataFrame, czyli przypadek, a ten sam backtest
+        # potrafił dać inny wynik po zmianie kolejności danych.
+        # Zmierzone na 21 migawkach (Deep Value, TOP 5, trzymanie 5 skanów):
+        # -0,81% bez reguły kontra -0,67% z regułą.
+        pom = entry_df.assign(
+            _flagi=pd.to_numeric(entry_df.get("Liczba flag"), errors="coerce").fillna(0),
+            _buy=pd.to_numeric(entry_df.get("Buy Score"), errors="coerce").fillna(0),
+        )
+        picks = pom.sort_values(
+            [score_col, "_flagi", "_buy", "Ticker"],
+            ascending=[False, True, False, True],
+        ).head(top_n)
         exit_prices = stocks[stocks["scan_date"] == exit_date][["Ticker", "Cena"]]
         merged = picks.merge(exit_prices, on="Ticker", how="inner", suffixes=("", "_exit"))
         if merged.empty:

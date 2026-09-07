@@ -29,7 +29,7 @@ export const KATEGORIE: Kategoria[] = [
     moduly: [
       { nazwa: "Screener", opis: "Wszystko naraz, z filtrami", sciezka: "/screener" },
       { nazwa: "Globalny przegląd", opis: "Szerokość rynku, heatmapy", sciezka: "/przeglad" },
-      { nazwa: "Dashboard", opis: "Widok kafelkowy", sciezka: null },
+      { nazwa: "Dashboard", opis: "Widok kafelkowy", sciezka: "/dashboard" },
     ],
   },
   {
@@ -63,15 +63,15 @@ export const KATEGORIE: Kategoria[] = [
       { nazwa: "Alarmy cenowe", opis: "Progi na wykresie", sciezka: "/alarmy" },
       { nazwa: "Watchlisty", opis: "Kilka list z notatkami", sciezka: "/watchlist" },
       { nazwa: "Analiza transakcji", opis: "Import z XTB", sciezka: "/transakcje" },
-      { nazwa: "Własne instrumenty", opis: "Ręcznie dodane tickery", sciezka: null },
+      { nazwa: "Własne instrumenty", opis: "Ręcznie dodane tickery", sciezka: "/instrumenty" },
     ],
   },
   {
     etykieta: "Backtesty",
     klasa: "k6",
     moduly: [
-      { nazwa: "Backtest strategii", opis: "Skuteczność wstecz", sciezka: null },
-      { nazwa: "Backtest spółki", opis: "Jedna spółka w czasie", sciezka: null },
+      { nazwa: "Backtest strategii", opis: "Skuteczność wstecz", sciezka: "/backtest" },
+      { nazwa: "Backtest spółki", opis: "Jedna spółka w czasie", sciezka: "/historia" },
     ],
   },
 ];

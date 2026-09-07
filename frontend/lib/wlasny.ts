@@ -1,4 +1,5 @@
-import { liczba, porownajRemis, type Instrument } from "./filtry";
+import { backtestOgolny, type OknoBacktestu } from "./backtest";
+import { liczba, type Instrument } from "./filtry";
 
 /**
  * Własny scoring — ranking na bazie WŁASNYCH wag zamiast sztywnych strategii.
@@ -110,24 +111,14 @@ export function policzWyniki(
 // Backtest własnych wag
 // ---------------------------------------------------------------------------
 
-export type OknoBacktestu = {
-  wejscie: string;
-  wyjscie: string;
-  sredniZwrot: number;
-  winRate: number;
-  spolek: number;
-};
-
 /**
- * Backtest na zapisanych migawkach: dla każdego dnia skanu bierze TOP N spółek
- * wg wyniku, sprawdza ich cenę `trzymaj` migawek później i liczy średni zwrot
- * oraz odsetek zyskownych pozycji.
+ * Backtest tej konkretnej kombinacji wag.
  *
- * Lustro `backtest_strategy()` z `core/scanner.py` — ta sama pętla i te same
- * definicje, żeby liczby po obu stronach dawały się porównać.
- *
- * CZEGO TO NIE MIERZY: kosztów transakcyjnych, dywidend i poślizgu. To ocena
- * samego doboru spółek, nie symulacja rachunku maklerskiego.
+ * Korzysta ze WSPÓLNEJ implementacji z `lib/backtest.ts`, tej samej co
+ * Backtest strategii — inaczej dwa ekrany liczyłyby „to samo" dwoma kodami,
+ * które z czasem by się rozjechały. Różnica jest jedna: tutaj wynik trzeba
+ * policzyć osobno dla KAŻDEJ migawki, bo percentyl zależy od całej stawki
+ * z tamtego dnia, a nie od gotowej kolumny.
  */
 export function backtest(
   wgDaty: Map<string, Instrument[]>,
@@ -135,52 +126,10 @@ export function backtest(
   topN: number,
   trzymaj: number,
 ): OknoBacktestu[] {
-  const daty = [...wgDaty.keys()].sort();
-  if (daty.length <= trzymaj) return [];
-
-  const wyniki: OknoBacktestu[] = [];
-  for (let i = 0; i + trzymaj < daty.length; i++) {
-    const wejscie = daty[i];
-    const wyjscie = daty[i + trzymaj];
-    const wejsciowe = (wgDaty.get(wejscie) ?? []).filter(
-      (r) => String(r.Typ ?? "") === "stock",
-    );
-    if (wejsciowe.length === 0) continue;
-
-    const punkty = policzWyniki(wejsciowe, wagi);
-    if (!punkty) return [];
-
-    const uszeregowane = wejsciowe
-      .map((r, idx) => ({ r, p: punkty[idx] ?? 0 }))
-      // Ta sama reguła remisów co w rankingu na ekranie — inaczej backtest
-      // testowałby inny zestaw spółek niż ten, który użytkownik widzi.
-      .sort((a, b) => (b.p !== a.p ? b.p - a.p : porownajRemis(a.r, b.r)))
-      .slice(0, topN);
-
-    const ceny = new Map<string, number>();
-    for (const r of wgDaty.get(wyjscie) ?? []) {
-      const c = liczba(r.Cena);
-      if (c !== null && c > 0) ceny.set(String(r.Ticker), c);
-    }
-
-    const zwroty: number[] = [];
-    for (const { r } of uszeregowane) {
-      const start = liczba(r.Cena);
-      const koniec = ceny.get(String(r.Ticker));
-      if (start === null || start <= 0 || koniec === undefined) continue;
-      zwroty.push((koniec / start - 1) * 100);
-    }
-    if (zwroty.length === 0) continue;
-
-    wyniki.push({
-      wejscie,
-      wyjscie,
-      sredniZwrot:
-        Math.round((zwroty.reduce((a, b) => a + b, 0) / zwroty.length) * 100) / 100,
-      winRate:
-        Math.round((zwroty.filter((z) => z > 0).length / zwroty.length) * 1000) / 10,
-      spolek: zwroty.length,
-    });
-  }
-  return wyniki;
+  return backtestOgolny(
+    wgDaty,
+    (spolki) => policzWyniki(spolki, wagi),
+    topN,
+    trzymaj,
+  );
 }
