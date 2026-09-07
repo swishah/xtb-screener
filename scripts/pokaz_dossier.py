@@ -69,6 +69,17 @@ def naglowek(wpis: dict) -> list[str]:
         f"(kurs na {_lb(zakres.get('pozycja_pct'), 1)}% zakresu)"
         + (f" | wolumen {wol.get('krotnosc')}× średniej z 20 sesji" if wol else ""),
     ]
+
+    # Kurs pochodzi z ostatniej świecy, a dane fundamentalne niżej z migawki.
+    # Gdy migawka jest starsza, trzeba o tym wiedzieć przy ocenie — stąd
+    # jawny rozjazd zamiast cichego zestawienia dwóch różnych dni.
+    rozjazd = wpis.get("rozjazd_wobec_migawki_pct")
+    if rozjazd is not None and abs(rozjazd) >= 1:
+        linie.append(
+            f"!! Kurs zmienił się o {rozjazd:+.2f}% od ostatniej migawki "
+            f"({_lb(wpis.get('kurs_migawki'))}). Poziomy i kurs są dzisiejsze, "
+            f"ale dane fundamentalne poniżej pochodzą z tamtej migawki."
+        )
     return linie
 
 

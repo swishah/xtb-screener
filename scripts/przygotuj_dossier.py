@@ -65,6 +65,14 @@ KOLUMNY_MIGAWKI = (
 PODJEDNOSTKI = {"GBP": "GBp", "ZAC": "ZAc", "ILA": "ILA", "GBX": "GBX"}
 
 
+def _liczba(w) -> float | None:
+    try:
+        x = float(w)
+    except (TypeError, ValueError):
+        return None
+    return x if x == x else None  # odsiewa NaN
+
+
 def _podjednostka(waluta: str) -> bool:
     """Czy waluta notowania jest setną częścią jednostki (pensy, agory…)."""
     w = str(waluta or "").strip()
@@ -103,9 +111,26 @@ def zbuduj_wpis(kandydat: dict, wiersz: dict) -> tuple[dict | None, str]:
     if len(df) < 60:
         return None, f"za krótka historia ({len(df)} sesji)"
 
-    dane = poziomy.zbuduj(df, kandydat.get("kurs"))
+    # KURS BIERZEMY Z OSTATNIEJ POBRANEJ ŚWIECY, NIE Z MIGAWKI.
+    #
+    # Pierwsza wersja przekazywała tu cenę z migawki, żeby dossier zgadzało się
+    # z resztą aplikacji. Przy codziennym skanie to jedno i to samo — ale gdy
+    # migawka jest starsza (weekend, nieudany skan, ręczne uruchomienie),
+    # dostawaliśmy poziomy policzone do DZIŚ zestawione z ceną SPRZED KILKU DNI.
+    # Bramka mierzy od tej ceny, czy wejście mieści się w 5%, więc plany
+    # wychodziłyby oparte na kursie, którego już nie ma. Poziomy i kurs muszą
+    # pochodzić z tego samego dnia — a najświeższy wspólny dzień to ostatnia
+    # świeca z Yahoo.
+    dane = poziomy.zbuduj(df)
     if dane is None:
         return None, "nie dało się policzyć poziomów"
+
+    # Rozjazd wobec migawki NIE jest błędem, ale musi być widoczny: mówi wprost,
+    # jak nieaktualne są dane fundamentalne dołożone niżej.
+    kurs_migawki = _liczba(wiersz.get("Cena"))
+    rozjazd = None
+    if kurs_migawki and dane.get("kurs"):
+        rozjazd = round((dane["kurs"] - kurs_migawki) / kurs_migawki * 100, 2)
 
     mozliwy, powod = bramka.mozliwy_plan(dane)
     if not mozliwy:
@@ -127,6 +152,8 @@ def zbuduj_wpis(kandydat: dict, wiersz: dict) -> tuple[dict | None, str]:
         "zrodla": kandydat["zrodla"],
         "liczba_zrodel": kandydat["liczba_zrodel"],
         "srednie_miejsce": kandydat["srednie_miejsce"],
+        "kurs_migawki": kurs_migawki,
+        "rozjazd_wobec_migawki_pct": rozjazd,
         "migawka": migawka,
     }
     wpis.update(dane)
@@ -169,9 +196,14 @@ def main() -> None:
             print(f"   ⏭️ pomijam: {powod}")
             odrzucone.append((ticker, powod))
         else:
+            r = wpis["rozjazd_wobec_migawki_pct"]
+            nota = ""
+            if r is not None and abs(r) >= 1:
+                nota = f", kurs {r:+.2f}% wobec migawki"
             print(f"   ✔️ {len(wpis['poziomy'])} poziomów, ATR "
                   f"{wpis['atr']} ({wpis['atr_pct']}%), trend "
-                  f"{wpis['trend']['1d']}/{wpis['trend']['1w']}/{wpis['trend']['1m']}")
+                  f"{wpis['trend']['1d']}/{wpis['trend']['1w']}/{wpis['trend']['1m']}"
+                  f"{nota}")
             wpisy.append(wpis)
         time.sleep(PRZERWA_S)
 
