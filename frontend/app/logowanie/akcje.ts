@@ -5,6 +5,7 @@ import {
   MIN_DLUGOSC_HASLA,
   posprzataj,
   sprawdzHaslo,
+  ustawHasloKodem,
   ustawHasloZetonem,
   utworzKonto,
   utworzSesje,
@@ -109,6 +110,28 @@ export async function poprosOReset(dane: FormData): Promise<void> {
     );
   }
   redirect("/reset?info=wyslano");
+}
+
+/**
+ * Reset hasła KODEM, bez poczty — jeden formularz zamiast maila z linkiem.
+ *
+ * Kody błędów są celowo ubogie: `dane` znaczy „adres, kod albo blokada",
+ * bez rozróżnienia. Gdyby strona mówiła, które z nich zawiodło, formularz
+ * zdradzałby listę zarejestrowanych adresów i potwierdzał trafienie w kod.
+ */
+export async function resetujKodem(dane: FormData): Promise<void> {
+  const email = String(dane.get("email") ?? "");
+  const kod = String(dane.get("kod") ?? "");
+  const haslo = String(dane.get("haslo") ?? "");
+  const powtorz = String(dane.get("powtorz") ?? "");
+
+  if (!email || !kod || !haslo) redirect("/reset?blad=puste");
+  if (haslo !== powtorz) redirect("/reset?blad=rozne");
+
+  const wynik = await ustawHasloKodem(email, kod, haslo);
+  if (!wynik.ok) redirect(`/reset?blad=${wynik.powod ?? "dane"}`);
+
+  redirect("/logowanie?info=haslo");
 }
 
 export async function ustawNoweHaslo(dane: FormData): Promise<void> {

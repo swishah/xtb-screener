@@ -1857,3 +1857,10 @@ th.kol-wykres, td.kol-wykres { width: 1%; white-space: nowrap; text-align: cente
   }
   .tab-dossier .miernik { justify-content: flex-start; }
 }
+
+/* Kreska miedzy dwiema drogami odzyskania hasla (kodem / mailem) na /reset.
+   Widoczna tylko wtedy, gdy obie sa dostepne. */
+.rozdzielacz {
+  border: none; border-top: 1px solid var(--line);
+  margin: 22px 0 18px;
+}

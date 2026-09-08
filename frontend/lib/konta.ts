@@ -393,6 +393,110 @@ export async function ustawHasloZetonem(
   return { ok: true };
 }
 
+// --- reset hasła KODEM, bez poczty -----------------------------------------
+
+/**
+ * Kod uprawniający do zmiany hasła bez wysyłania maila.
+ *
+ * Bierzemy `KOD_RESETU`, a gdy go nie ma — `KOD_REJESTRACJI`. Ten drugi
+ * wariant jest świadomym ustępstwem na rzecz wygody: jeden sekret do
+ * zapamiętania zamiast dwóch.
+ *
+ * MA JEDNAK CENĘ I TRZEBA JĄ ZNAĆ. Kod rejestracji staje się wtedy KLUCZEM
+ * UNIWERSALNYM do każdego konta w tej instalacji: kto go zna, ustawia dowolne
+ * hasło, nie mając dostępu do skrzynki właściciela. Przy reset przez maila
+ * przejęcie konta wymaga włamania na pocztę; tutaj wystarczy sam kod.
+ * Ustawienie osobnego `KOD_RESETU` rozdziela te dwie role — zalecane, gdy kont
+ * jest więcej niż jedno albo gdy kod rejestracji komuś się podało.
+ */
+export function kodResetu(): string {
+  return process.env.KOD_RESETU || process.env.KOD_REJESTRACJI || "";
+}
+
+export function resetKodemMozliwy(): boolean {
+  return Boolean(kodResetu());
+}
+
+/**
+ * Porównanie kodów odporne na pomiar czasu.
+ *
+ * Porównujemy SKRÓTY, nie same kody: `timingSafeEqual` wymaga bufory tej samej
+ * długości i rzuca wyjątkiem przy różnych, a sama długość odpowiedzi zdradzałaby
+ * długość prawdziwego kodu. Skrót wyrównuje to do 32 bajtów zawsze.
+ */
+function kodyRowne(podany: string, oczekiwany: string): boolean {
+  if (!oczekiwany) return false;
+  return timingSafeEqual(
+    createHash("sha256").update(podany).digest(),
+    createHash("sha256").update(oczekiwany).digest(),
+  );
+}
+
+/**
+ * Ustawia nowe hasło po podaniu adresu i kodu. Zwraca KOD błędu, nie zdanie.
+ *
+ * NIEISTNIEJĄCE KONTO, KONTO ZABLOKOWANE I ZŁY KOD DAJĄ TEN SAM WYNIK.
+ * Rozróżnienie ich powiedziałoby obcemu, które adresy są zarejestrowane
+ * i czy trafił w kod — czyli dokładnie to, czego ekran logowania pilnuje
+ * od początku.
+ */
+export async function ustawHasloKodem(
+  email: string,
+  kod: string,
+  noweHaslo: string,
+): Promise<{ ok: boolean; powod?: string }> {
+  // Długość hasła sprawdzamy PRZED kodem i bez naliczania próby. To pomyłka
+  // użytkownika, nie atak — a gdyby szło odwrotnie, komunikat „za krótkie"
+  // pojawiałby się wyłącznie po trafieniu kodu i tym samym by go potwierdzał.
+  if (noweHaslo.length < MIN_DLUGOSC_HASLA) return { ok: false, powod: "krotkie" };
+
+  const oczekiwany = kodResetu();
+  if (!oczekiwany) return { ok: false, powod: "wylaczone" };
+
+  await zapewnijSchemat();
+  const db = klientZapisu();
+  const wynik = await db.execute({
+    sql: "SELECT id, zablokowany_do, nieudane_proby FROM uzytkownicy WHERE email = ?",
+    args: [znormalizujEmail(email)],
+  });
+
+  if (wynik.rows.length === 0) {
+    kodyRowne(kod, oczekiwany); // wyrównanie czasu, wynik celowo pomijany
+    return { ok: false, powod: "dane" };
+  }
+
+  const w = wynik.rows[0] as unknown as {
+    id: number;
+    zablokowany_do: string | null;
+    nieudane_proby: number;
+  };
+
+  if (w.zablokowany_do && w.zablokowany_do > terazISO()) {
+    return { ok: false, powod: "dane" };
+  }
+
+  if (!kodyRowne(kod, oczekiwany)) {
+    // TA SAMA PULA PRÓB CO PRZY LOGOWANIU, i to jest istotne: gdyby reset
+    // miał własny licznik, byłby furtką omijającą blokadę po nieudanych
+    // logowaniach — wystarczyłoby zgadywać kod zamiast hasła.
+    const proby = Number(w.nieudane_proby) + 1;
+    await db.execute({
+      sql: "UPDATE uzytkownicy SET nieudane_proby = ?, zablokowany_do = ? WHERE id = ?",
+      args: [
+        proby,
+        proby >= LIMIT_PROB ? zaISO(MINUT_BLOKADY * 60_000) : null,
+        w.id,
+      ],
+    });
+    return { ok: false, powod: "dane" };
+  }
+
+  // zmienHaslo zeruje licznik prób i kasuje WSZYSTKIE sesje — więc udany
+  // reset wylogowuje też ewentualnego intruza, który już siedział w koncie.
+  const zmiana = await zmienHaslo(Number(w.id), noweHaslo);
+  return zmiana.ok ? { ok: true } : { ok: false, powod: "krotkie" };
+}
+
 /** Sprzątanie wygasłych wierszy. Wołane przy okazji logowania — bez crona. */
 export async function posprzataj(): Promise<void> {
   await zapewnijSchemat();

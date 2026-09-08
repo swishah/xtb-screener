@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { zaloguj } from "./akcje";
-import { rejestracjaOtwarta } from "@/lib/konta";
+import { rejestracjaOtwarta, resetKodemMozliwy } from "@/lib/konta";
 import { pocztaSkonfigurowana } from "@/lib/poczta";
 import { zalogowany } from "@/lib/sesja";
 
@@ -69,13 +69,14 @@ export default async function Logowanie({
           <button type="submit">Zaloguj</button>
         </form>
 
-        {/* Odnośnik do resetu pokazujemy TYLKO wtedy, gdy poczta jest
-            skonfigurowana. Link prowadzący do formularza, który z założenia
-            nic nie wyśle, jest gorszy niż jego brak — użytkownik czekałby na
-            maila, którego nie ma. Bez SMTP hasło ustawia się skryptem
+        {/* Odnośnik do resetu pokazujemy TYLKO wtedy, gdy któraś droga
+            faktycznie działa: kod (KOD_RESETU / KOD_REJESTRACJI) albo poczta.
+            Link prowadzący do formularza, który z założenia nic nie zrobi,
+            jest gorszy niż jego brak — użytkownik czekałby na maila, którego
+            nie ma. Bez obu hasło ustawia się skryptem
             scripts/ustaw_haslo.py. */}
         <div className="pod-formularzem">
-          {pocztaSkonfigurowana() ? (
+          {pocztaSkonfigurowana() || resetKodemMozliwy() ? (
             <Link href="/reset">Nie pamiętam hasła</Link>
           ) : (
             <span />
