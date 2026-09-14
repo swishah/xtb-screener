@@ -1,19 +1,17 @@
 # .github/workflows/daily-snapshot.yml
 #
-# Uruchamia screener raz dziennie po zamknięciu sesji europejskich i zapisuje
-# snapshot z powrotem do repozytorium. Claude czyta te pliki przez konektor GitHub.
-#
 # Wymaga: Settings > Actions > General > Workflow permissions = "Read and write"
+# Przy nieudanym przebiegu GitHub wysyla maila na adres konta -- osobne
+# powiadomienie nie jest potrzebne.
 
 name: Daily snapshot
 
 on:
   schedule:
-    # 06:10 UTC w dni robocze — po zamknięciu sesji US z poprzedniego dnia.
-    # UWAGA: harmonogram GitHub Actions bywa opóźniony o kilkanaście minut przy
-    # dużym obciążeniu. Nie zakładaj punktualności co do minuty.
+    # 06:10 UTC w dni robocze. Harmonogram GitHuba bywa opozniony
+    # o kilkanascie minut przy duzym obciazeniu.
     - cron: "10 6 * * 1-5"
-  workflow_dispatch:        # pozwala odpalić ręcznie z zakładki Actions
+  workflow_dispatch:
 
 concurrency:
   group: daily-snapshot
@@ -22,7 +20,7 @@ concurrency:
 jobs:
   snapshot:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
 
     steps:
       - uses: actions/checkout@v4
@@ -38,14 +36,9 @@ jobs:
           pip install -r requirements.txt
 
       - name: Build snapshot
+        # Rotacja starych plikow jest w skrypcie (--keep-days), wiec nie ma
+        # juz osobnego kroku "Prune old snapshots".
         run: python scripts/build_snapshot.py --out data/snapshots
-
-      - name: Prune old snapshots
-        # Trzyma ~400 plików dziennych. Bez tego repo puchnie w nieskończoność.
-        run: |
-          cd data/snapshots
-          ls -1 [0-9]*.json | sort | head -n -400 | xargs -r rm --
-          cd - > /dev/null
 
       - name: Commit results
         run: |
@@ -53,19 +46,8 @@ jobs:
           git config user.email "actions@github.com"
           git add data/snapshots
           if git diff --staged --quiet; then
-            echo "Brak zmian — nic do commitowania."
+            echo "Brak zmian - nic do commitowania."
           else
             git commit -m "snapshot: $(date -u +%Y-%m-%d)"
             git push
           fi
-
-      - name: Notify Discord on failure
-        # Bez tego cichy failure oznacza, że przez tydzień czytasz stare dane
-        # i nie wiesz o tym. Ustaw DISCORD_WEBHOOK w Settings > Secrets > Actions.
-        if: failure()
-        env:
-          WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-        run: |
-          curl -H "Content-Type: application/json" \
-               -d '{"content":"Snapshot failed: '"$GITHUB_REPOSITORY"' run '"$GITHUB_RUN_ID"'"}' \
-               "$WEBHOOK"
