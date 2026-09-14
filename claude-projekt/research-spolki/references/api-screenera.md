@@ -1,7 +1,7 @@
 # Kontrakt danych — publiczne API screenera
 
 Screener skanuje codziennie po zamknięciu sesji około 1300 akcji i ETF-ów dostępnych
-na XTB. Wyniki siedzą w bazie, a te cztery trasy są jedynym publicznym wyjściem z niej.
+na XTB. Wyniki siedzą w bazie, a te trasy są jedynym publicznym wyjściem z niej.
 
 Adres bazowy: `https://xtb-screener.vercel.app`
 
@@ -18,6 +18,8 @@ tak, jak może rozjechać się ten plik.
 | `GET /api/dane/szukaj?q=<fraza>` | nazwa → ticker; szukaj tak, zamiast zgadywać |
 | `GET /api/dane/spolka/<TICKER>` | wszystko, co skan wie o jednej spółce |
 | `GET /api/dane/notowania/<TICKER>` | poziomy techniczne liczone na żywo z OHLC |
+| `GET /api/dane/finanse/<TICKER>` | sprawozdania: 4 lata i 5 kwartałów, z policzonymi marżami |
+| `GET /api/dane/kurs` | kursy walut z NBP do przeliczenia pozycji na złote |
 | `GET /api/dane/rankingi` | czołówki dziesięciu rankingów |
 
 ## `/api/dane/spolka/<TICKER>`
@@ -107,6 +109,60 @@ stop, tylko nadzieja.
 
 Brak odpowiedzi 200 znaczy jedno z dwóch: zły ticker albo historia krótsza niż 60 sesji
 (świeży debiut, instrument wycofany). W obu przypadkach planu wejścia nie buduj.
+
+## `/api/dane/finanse/<TICKER>`
+
+Cztery okresy roczne i pięć kwartalnych, ze wskaźnikami policzonymi po stronie serwera.
+
+```json
+{
+  "ticker": "ALE.WA", "waluta_raportowania": "PLN",
+  "lata": [
+    { "okres": "2025-12-31", "waluta": "PLN",
+      "TotalRevenue": 11458200000, "GrossProfit": 10734100000,
+      "OperatingIncome": 2161300000, "NetIncome": 1517100000,
+      "EBITDA": 2913500000, "OperatingCashFlow": 2869700000,
+      "CapitalExpenditure": -712300000, "FreeCashFlow": 2157400000,
+      "TotalDebt": 5136900000, "CashAndCashEquivalents": 2508200000,
+      "marza_brutto_pct": 93.68, "marza_operacyjna_pct": 18.86,
+      "marza_netto_pct": 13.24, "przeplywy_do_zysku": 1.89,
+      "dynamika_przychodow_pct": 10.52, "dlug_netto_do_ebitda": 0.9 }
+  ],
+  "kwartaly": [ { "okres": "2026-03-31", "...": "węższy zestaw pozycji" } ],
+  "uwagi": ["..."]
+}
+```
+
+**Marże, dynamikę i relację przepływów do zysku liczy serwer** — nie licz ich ponownie
+z liczb przepisanych do rozmowy. To najczęstsze miejsce, w którym mylą się okresy:
+marża policzona z zysku za jeden rok i przychodów za inny wygląda dokładnie tak samo
+jak poprawna.
+
+Trzy rzeczy, o których trzeba pamiętać:
+
+1. **`przeplywy_do_zysku` to najważniejsza pojedyncza kontrola.** Zdrowa spółka ma
+   przepływy operacyjne zbliżone do zysku netto albo wyższe. Zysk rosnący przy płaskich
+   przepływach to najczęstszy wczesny sygnał, że coś jest nie tak z jakością zysku.
+   Wartość ujemna znaczy, że jedno z dwóch jest ujemne — sprawdź, które.
+2. **Waluta sprawozdania bywa inna niż waluta notowania.** Spółka raportująca w euro,
+   a notowana w złotych, ma wynik przesunięty o kurs.
+3. **Liczby są surowe, bez korekt o zdarzenia jednorazowe.** Skokowa zmiana zysku netto
+   przy stabilnych przychodach to zwykle odpis albo sprzedaż aktywów — sprawdź to
+   w raporcie spółki, zanim policzysz z tego trend.
+
+ETF-y i fundusze nie mają sprawozdań z definicji i trasa oddaje wtedy 404. Przy spółce
+404 znaczy, że dostawca nie ma danych — wtedy dopiero szukaj w sieci.
+
+## `/api/dane/kurs`
+
+```
+GET /api/dane/kurs              -> USD, EUR, GBP i CHF naraz
+GET /api/dane/kurs?waluta=SEK   -> dowolna inna
+```
+
+NBP, tabela A, z datą notowania. To **kurs średni, nie kurs brokera** — przy
+przewalutowaniu dochodzi spread, więc liczba akcji policzona z tego kursu jest
+przybliżeniem, a nie wartością do dotrzymania co do sztuki.
 
 ## `/api/dane/rankingi`
 

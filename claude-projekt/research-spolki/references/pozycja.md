@@ -30,13 +30,15 @@ nie robić.
 
 ## Przeliczenie na złote
 
-Kurs walutowy bierz **z NBP**, tabela A, i podaj datę:
+Kurs walutowy bierz **z naszej trasy**, jednym zapytaniem po wszystkie waluty:
 
 ```
-GET https://api.nbp.pl/api/exchangerates/rates/a/usd/?format=json
-GET https://api.nbp.pl/api/exchangerates/rates/a/eur/?format=json
-GET https://api.nbp.pl/api/exchangerates/rates/a/gbp/?format=json
+GET https://xtb-screener.vercel.app/api/dane/kurs
+GET https://xtb-screener.vercel.app/api/dane/kurs?waluta=SEK
 ```
+
+Pod spodem jest NBP, tabela A, z datą notowania — ale odpytywany po naszej stronie,
+więc nie dokłada kolejnej domeny do zatwierdzania w rozmowie.
 
 Kurs NBP to **kurs średni, nie kurs brokera** — przy przewalutowaniu u brokera dochodzi
 spread. Traktuj wynik jako przybliżenie i powiedz to wprost zamiast podawać liczbę

@@ -68,6 +68,23 @@ export async function GET(): Promise<Response> {
         przyklad: "/api/dane/notowania/FRO.WA",
       },
       {
+        adres: "/api/dane/finanse/<TICKER>",
+        po_co:
+          "Sprawozdania finansowe: cztery lata i pięć kwartałów — przychody, " +
+          "koszty, marże, przepływy operacyjne, nakłady, dług netto, liczba akcji, " +
+          "plus policzone marże i relacja przepływów do zysku. Weź to STĄD zamiast " +
+          "szukać sprawozdań w sieci.",
+        przyklad: "/api/dane/finanse/ALE.WA",
+      },
+      {
+        adres: "/api/dane/kurs",
+        po_co:
+          "Kursy walut z NBP (tabela A) do przeliczenia pozycji na złote. Bez " +
+          "parametru USD, EUR, GBP i CHF naraz.",
+        parametry: "?waluta=SEK — dowolna inna waluta",
+        przyklad: "/api/dane/kurs",
+      },
+      {
         adres: "/api/dane/rankingi",
         po_co: `Czołowe ${ILE_W_RANKINGU} spółek w każdym z ${STRATEGIE.length + 1} rankingów.`,
         parametry: "?ile=<1-30>, ?klucz=<klucz rankingu>",
@@ -75,7 +92,10 @@ export async function GET(): Promise<Response> {
       },
     ],
     czego_tu_nie_ma: [
-      "Sprawozdań finansowych, raportów bieżących i transkrypcji — te zbieraj z sieci.",
+      "Raportów bieżących, transkrypcji konferencji, transakcji insiderów " +
+        "i powodów spadków — tego szukaj w sieci, najlepiej WYSZUKIWARKĄ, " +
+        "a pobieraj konkretny adres dopiero wtedy, gdy wynik wyszukiwania " +
+        "nie wystarcza.",
       "Krótkich pozycji i rekomendacji analityków dla części rynków — w migawce " +
         "są tylko tam, gdzie skan zdołał je pobrać; pole 'BRAK' znaczy brak danych, " +
         "nie zero.",

@@ -5,11 +5,22 @@ i mianownik osobno, a to dopiero mówi, CO SIĘ DZIEJE. C/Z 9 przy przychodach r
 12% rocznie i C/Z 9 przy przychodach spadających 8% rocznie to ta sama liczba opisująca
 dwie zupełnie różne spółki.
 
-**Minimum: pięć lat rocznych i cztery ostatnie kwartały.** Krótszy szereg nie pokaże
+**Minimum: cztery lata roczne i cztery ostatnie kwartały** (tyle oddaje trasa). Krótszy szereg nie pokaże
 ani cyklu, ani trendu marż. Jeśli spółka ma mniej historii (debiut, wydzielenie), napisz
 to wprost — to jest istotna informacja o ryzyku, nie brak danych do przemilczenia.
 
 ## Skąd brać
+
+**Najpierw `GET https://xtb-screener.vercel.app/api/dane/finanse/<TICKER>`** — cztery
+lata i pięć kwartałów, z policzonymi marżami, dynamiką przychodów, relacją przepływów
+do zysku i długiem netto do EBITDA. Dane pochodzą z tego samego źródła, z którego liczy
+je pythonowa część projektu, i obejmują także GPW oraz giełdy europejskie.
+
+Do źródeł poniżej sięgaj **dopiero wtedy, gdy trasa czegoś nie ma** albo gdy potrzebujesz
+treści, a nie liczb: podziału kosztów, komentarza zarządu, przyczyny odpisu, harmonogramu
+zapadalności długu. Wtedy wybierz JEDNO źródło, nie pięć — każda nowa domena to osobne
+pytanie do użytkownika o zgodę.
+
 
 | Rynek | Źródło pierwotne | Wygodny agregat |
 |---|---|---|
@@ -22,7 +33,7 @@ kompletem. Nie porównuj wtedy „kwartału do kwartału" na danych o różnym z
 
 ## Co wyciągnąć — dziewięć pozycji
 
-1. **Przychody** za 5 lat i 4 kwartały, plus dynamika rok do roku. Szukaj przyspieszenia
+1. **Przychody** za cztery lata i kwartały, plus dynamika rok do roku. Szukaj przyspieszenia
    albo hamowania, nie samego poziomu.
 2. **Marża brutto** — mówi o sile cenowej. Marża brutto, która spada trzy lata z rzędu,
    znaczy, że spółka nie umie przerzucić kosztów na klienta.
@@ -61,13 +72,13 @@ kompletem. Nie porównuj wtedy „kwartału do kwartału" na danych o różnym z
 - **Prognoz.** Prognoza zarządu (guidance) to deklaracja, nie dane. Podawaj ją jako
   cudzą wypowiedź z datą, nigdy jako liczbę w tabeli wyników.
 - **Jakości zarządu.** Da się zmierzyć jej ślady: powtarzalność obietnic wobec wykonania,
-  alokację kapitału (co zrobili z gotówką przez pięć lat), rozwodnienie.
+  alokację kapitału (co zrobili z gotówką przez te lata), rozwodnienie.
 - **Tego, co siedzi w pozycjach pozabilansowych** — leasingi, gwarancje, zobowiązania
   warunkowe. Jeśli spółka ma ich dużo, wspomnij o tym zamiast udawać, że dług netto
   opisuje całość.
 
 ## Jak to podać w raporcie
 
-Tabela pięciu lat z czterema wierszami (przychody, marża operacyjna, zysk netto,
+Tabela czterech lat z czterema wierszami (przychody, marża operacyjna, zysk netto,
 przepływy operacyjne), a pod nią **trzy zdania o tym, co się w tych liczbach dzieje**.
 Tabela bez wniosku jest przepisaniem cudzej strony; wniosek bez tabeli jest opinią.

@@ -91,7 +91,14 @@ Podawaj konkretne poziomy, nie opisy jakościowe.
 ## Krok 3 — warstwy, których screener nie ma
 
 Screener liczy liczby. Te cztery warstwy wymagają wyszukiwania i są tym, co odróżnia
-research od odczytania tabelki:
+research od odczytania tabelki.
+
+**Zanim zaczniesz: używaj WYSZUKIWARKI, nie pobierania adresów.** Każda nowa domena,
+którą chcesz pobrać, to osobne pytanie do użytkownika o zgodę — przy sześciu źródłach
+research zamienia się w serię okienek do klikania. Wyszukiwanie takiego pytania nie
+wywołuje. Pobieraj konkretny adres dopiero wtedy, gdy wyniki wyszukiwania naprawdę nie
+wystarczają (na przykład trzeba wejść w treść raportu), i ogranicz się do JEDNEGO
+najlepszego źródła na warstwę zamiast zbierać pięć potwierdzeń tego samego.
 
 1. **Dlaczego jest tam, gdzie jest.** Przy dużym dystansie od szczytu znajdź KONKRETNY
    powód: wyniki poniżej oczekiwań, utrata kontraktu, zmiana regulacji, problem sektorowy.
@@ -108,9 +115,20 @@ research od odczytania tabelki:
 
 ## Krok 4 — sprawozdania finansowe
 
-Przeczytaj `references/sprawozdania.md` i zbierz **pięć lat** (albo ile jest) przychodów,
-marż, przepływów i zadłużenia plus ostatnie cztery kwartały. Bez tego kroku raport jest
-opisem wykresu, a nie analizą spółki.
+```
+GET https://xtb-screener.vercel.app/api/dane/finanse/<TICKER>
+```
+
+Cztery lata i pięć kwartałów: przychody, koszty, marża brutto, operacyjna i netto,
+przepływy operacyjne, nakłady, wolne przepływy, dług netto do EBITDA, liczba akcji.
+Marże i dynamiki są **policzone po stronie serwera**, więc nie licz ich sam z liczb
+przepisanych do rozmowy — to najczęstsze miejsce, w którym mylą się okresy.
+
+**Nie szukaj sprawozdań w sieci, dopóki ta trasa oddaje dane.** Jeśli czegoś w niej
+brakuje (ETF-y nie mają sprawozdań z definicji, część małych spółek nie ma pokrycia),
+dopiero wtedy sięgnij po źródła z `references/sprawozdania.md`.
+
+Jak to czytać i czego w tych liczbach szukać: `references/sprawozdania.md`.
 
 Minimum, które musi znaleźć się w raporcie: dynamika przychodów, co się dzieje z marżami
 i DLACZEGO, przepływy operacyjne wobec zysku netto, zadłużenie wobec EBITDA i wobec
@@ -127,7 +145,10 @@ jaki faktycznie istnieje w źródłach** — nie wersję ze słomy. I odwrotnie.
 
 ## Krok 6 — pozycja i plan wejścia
 
-Reguły liczenia, przeliczanie walut, prowizje i limity płynności: `references/pozycja.md`.
+Reguły liczenia, prowizje i limity płynności: `references/pozycja.md`.
+Kurs walutowy bierz z `GET https://xtb-screener.vercel.app/api/dane/kurs` (NBP, tabela A,
+cztery główne waluty naraz) — nie z api.nbp.pl wprost, bo to kolejna domena do
+zatwierdzania.
 
 **Domyślny limit to 5 000 zł na JEDNĄ spółkę** — tyle, ile użytkownik przeznacza
 maksymalnie na pojedynczą pozycję. Jeśli poda inną kwotę, użyj jego.

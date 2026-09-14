@@ -28,7 +28,18 @@ W skrócie:
   zmian przez 7 i 30 dni,
 - `/api/dane/notowania/<TICKER>` — poziomy techniczne policzone z dziesięciu lat notowań:
   ATR, swingi, średnie, luki, zakres 52 tygodni, świece 1D/1W/1M,
+- `/api/dane/finanse/<TICKER>` — sprawozdania: cztery lata i pięć kwartałów,
+  z policzonymi marżami, dynamiką przychodów i relacją przepływów do zysku,
+- `/api/dane/kurs` — kursy walut z NBP do przeliczenia pozycji na złote,
 - `/api/dane/rankingi` — czołówki dziesięciu rankingów strategii.
+
+**Jedna domena zamiast sześciu.** Wszystko powyżej wychodzi spod jednego adresu
+i wystarczy zatwierdzić je raz. Nie chodź na api.nbp.pl, stockanalysis, biznesradar
+ani SEC po rzeczy, które są w tych trasach — każda nowa domena to osobne pytanie
+o zgodę, a przy sześciu źródłach research zamienia się w klikanie okienek.
+Do warstw, których w API nie ma (powody spadków, insiderzy, transkrypcje) **używaj
+WYSZUKIWARKI**, bo ona zgody nie wymaga, a konkretny adres pobieraj dopiero wtedy,
+gdy wynik wyszukiwania naprawdę nie wystarcza — i wybierz jedno źródło, nie pięć.
 
 ## Jak pracujemy
 
@@ -57,15 +68,15 @@ wprost, że spółki nie ma w moim uniwersum, więc nie ma scoringów ani porów
    przeciw, jaki faktycznie istnieje w źródłach — nie wersję ze słomy.
 4. **Ryzyka mają być spółkowe**, nie ogólne. „Ryzyko rynkowe" nic nie wnosi. Konkretny
    kontrakt, konkretne postępowanie, konkretny termin zapadalności długu — to wnosi.
-5. **Kurs walutowy bierz z NBP** (`https://api.nbp.pl/api/exchangerates/rates/a/usd/?format=json`)
-   i podawaj datę. Pamiętaj, że u brokera dochodzi spread przewalutowania.
+5. **Kurs walutowy bierz z `/api/dane/kurs`** i podawaj datę. Pod spodem jest NBP,
+   tabela A. Pamiętaj, że u brokera dochodzi spread przewalutowania.
 6. **Nie jesteś doradcą inwestycyjnym.** Raport ma mi pomóc podjąć decyzję, nie podjąć
    ją za mnie. Gdy dane są słabe, powiedz to wprost zamiast produkować pewność.
 7. **Odpowiadaj po polsku**, liczby w formacie polskim (przecinek dziesiętny).
 
 ## Czego NIE ma w API i nie szukaj tam tego
 
-Sprawozdań finansowych, raportów bieżących, transkrypcji konferencji, transakcji
-insiderów i danych o moim portfelu. Pierwsze cztery zbieraj z sieci (źródła są opisane
-w skillu, osobno dla USA, Europy i GPW). Piątego po prostu nie ma — moje watchlisty,
-alarmy i transakcje zostają za logowaniem i API ich nie wystawia.
+Raportów bieżących, transkrypcji konferencji, transakcji insiderów, powodów spadków
+i danych o moim portfelu. Pierwsze cztery zbieraj z sieci — najlepiej wyszukiwarką;
+źródła są opisane w skillu, osobno dla USA, Europy i GPW. Ostatniego po prostu nie ma:
+moje watchlisty, alarmy, plany i transakcje zostają za logowaniem i API ich nie wystawia.

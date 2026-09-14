@@ -28,7 +28,17 @@ nie ma jak się do niej dostać. Dlatego doszły **publiczne trasy tylko do odcz
 | `/api/dane/szukaj?q=` | nazwa spółki → ticker |
 | `/api/dane/spolka/<TICKER>` | pełny wiersz migawki, kierunek zmian 7d/30d, mediany sektora, rankingi |
 | `/api/dane/notowania/<TICKER>` | ATR, swingi, średnie, luki, zakres 52 tygodni, świece 1D/1W/1M |
+| `/api/dane/finanse/<TICKER>` | sprawozdania: cztery lata i pięć kwartałów, z policzonymi marżami |
+| `/api/dane/kurs` | kursy walut z NBP do przeliczenia pozycji na złote |
 | `/api/dane/rankingi` | czołówki dziesięciu rankingów |
+
+**Dlaczego tych tras jest siedem, a nie trzy.** Claude w rozmowie na claude.ai pyta
+o zgodę przy każdej NOWEJ domenie, którą chce pobrać. Gdyby sprawozdania szły z SEC
+i biznesradaru, a kursy z api.nbp.pl, jeden research kończyłby się serią okienek do
+klikania. Wszystko, co da się policzyć po naszej stronie, wychodzi więc spod JEDNEGO
+adresu — zatwierdzasz go raz i masz spokój. Sieć zostaje wyłącznie do rzeczy, których
+w żadnej bazie nie ma: powodów spadków, transakcji insiderów, transkrypcji konferencji
+— a i tam skill każe używać wyszukiwarki, bo ona zgody nie wymaga.
 
 **Te trasy są publiczne — kto zna adres, zobaczy te liczby.** To była świadoma decyzja:
 wszystkie te wartości są policzone z publicznych notowań, więc ich ujawnienie nikogo nie
@@ -84,6 +94,7 @@ Jeśli w odpowiedzi nie widzisz **daty migawki** ani **nazw poziomów** przy sto
 | `404` z `/api/dane/spolka/...` | zły ticker albo spółka spoza uniwersum — sprawdź `/api/dane/szukaj` |
 | `404` z `/api/dane/notowania/...` | Yahoo nie zna tickera albo historia krótsza niż 60 sesji |
 | poziomy bez nazw, „okolice 42,80" | model nie użył API — przypomnij o zasadzie nr 2 z instrukcji Projektu |
+| pyta o zgodę na kolejne strony | sięga po źródło, które jest już w API — przypomnij zasadę „jedna domena" z instrukcji Projektu |
 
 ## Czego ta maszyna nie robi
 
