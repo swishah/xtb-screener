@@ -20,6 +20,24 @@ Dwie zasady ważniejsze od wszystkich pozostałych:
    Jeśli żaden policzony poziom nie pasuje do tezy, zrezygnuj ze spółki zamiast
    dosuwać liczby.
 
+## Zanim zaczniesz — jak w ogóle pobrać dane
+
+Narzędzie pobierania stron przepuszcza **wyłącznie adresy obecne dosłownie w rozmowie**.
+Nie umiesz złożyć adresu z szablonu, podstawiając ticker — `/api/dane/spolka/<TICKER>`
+zostanie odrzucone, mimo że sam adres bazowy przechodzi.
+
+Dlatego **zanim zaczniesz cokolwiek zbierać z sieci, poproś użytkownika o wklejenie
+jednego adresu**:
+
+    https://xtb-screener.vercel.app/api/dane/wszystko/TICKER
+
+(z podstawionym tickerem). Ta trasa oddaje naraz migawkę ze screenera, poziomy
+techniczne i sprawozdania — czyli kroki 1, 2 i 4 w jednym zapytaniu.
+
+Poproś o to **w pierwszej odpowiedzi**, nie na końcu. Research zrobiony bez tych
+danych i tak trzeba będzie powtórzyć, a plan wejścia bez policzonych poziomów nie
+powstanie w ogóle.
+
 ## Krok 0 — ustal spółkę i rynek
 
 Zidentyfikuj giełdę po tickerze lub nazwie. Gdy masz samą nazwę albo nie jesteś pewien

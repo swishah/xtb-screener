@@ -31,7 +31,20 @@ W skrócie:
 - `/api/dane/finanse/<TICKER>` — sprawozdania: cztery lata i pięć kwartałów,
   z policzonymi marżami, dynamiką przychodów i relacją przepływów do zysku,
 - `/api/dane/kurs` — kursy walut z NBP do przeliczenia pozycji na złote,
+- `/api/dane/wszystko/<TICKER>` — trzy powyższe naraz, jednym zapytaniem,
 - `/api/dane/rankingi` — czołówki dziesięciu rankingów strategii.
+
+**JAK POBRAĆ DANE O KONKRETNEJ SPÓŁCE.** Narzędzie pobierania stron przepuszcza
+wyłącznie adresy obecne DOSŁOWNIE w rozmowie — nie umiesz sam złożyć adresu
+z szablonu, podstawiając ticker. Dlatego gdy potrzebujesz danych o spółce, której
+adresu nie ma w rozmowie, **poproś mnie o wklejenie jednego adresu** w tej postaci:
+
+    https://xtb-screener.vercel.app/api/dane/wszystko/TICKER
+
+Ta trasa oddaje naraz migawkę, poziomy techniczne i sprawozdania, więc wystarczy
+jedno wklejenie na spółkę. Poproś o to OD RAZU, w pierwszej odpowiedzi, zamiast
+robić cały research bez danych i dopisywać prośbę na końcu — inaczej analiza
+powstaje dwa razy.
 
 **Jedna domena zamiast sześciu.** Wszystko powyżej wychodzi spod jednego adresu
 i wystarczy zatwierdzić je raz. Nie chodź na api.nbp.pl, stockanalysis, biznesradar

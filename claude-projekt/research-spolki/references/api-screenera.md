@@ -185,6 +185,17 @@ Dwie pułapki wbudowane w te rankingi, obie zmierzone na prawdziwych danych:
 
 ## Jak czytać wartości
 
+- **NIE MIESZAJ MARŻ Z MIGAWKI Z MARŻAMI ZE SPRAWOZDAŃ — to bywają różne okresy.**
+  Zmierzone na czterech spółkach: marża NETTO w migawce jest zawsze TTM (DECK, MMM,
+  KO, ALE.WA — zgodność co do setnych), ale marża OPERACYJNA raz odpowiada ostatniemu
+  kwartałowi (DECK 15,23% przy TTM 22,67%; KO 34,87% przy TTM 31,8%), a raz TTM
+  (MMM, ALE.WA). Przy spółce sezonowej rozjazd sięga **7 punktów procentowych**.
+  Wniosek praktyczny: **marże i dynamiki do RAPORTU bierz z `/api/dane/finanse`**,
+  gdzie każdy okres jest podpisany datą. Migawkowa marża służy do scoringu wewnątrz
+  uniwersum, nie do zdania „marża operacyjna wynosi X".
+- **`Wzrost przychodów (%)` w migawce to dynamika KWARTALNA rok do roku**, nie roczna.
+  DECK: 5,7% w migawce wobec 9,76% za rok obrotowy. Obie liczby są prawdziwe i opisują
+  co innego.
 - **`"BRAK"` w polu liczbowym znaczy: dostawca nie podał wartości.** Nigdy nie traktuj
   tego jako zera i nie uzupełniaj z pamięci. Payout ratio `BRAK` to „nie wiadomo",
   a nie „nie wypłaca". Jeśli liczba jest potrzebna do tezy — poszukaj jej w sieci
