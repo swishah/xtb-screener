@@ -56,6 +56,15 @@ export type Notowania = {
   zamkniecie: number[];
   najwyzsze: number[];
   najnizsze: number[];
+  /**
+   * Otwarcie i wolumen doszły na potrzeby `lib/poziomy.ts` (luki i wolumen
+   * wobec średniej). Analiza transakcji ich nie używa, więc o KOMPLETNOŚĆ
+   * wiersza decydują nadal wyłącznie cena zamknięcia, maksimum i minimum —
+   * inaczej dołożenie tych dwóch pól zmieniłoby po cichu zestaw sesji,
+   * na których liczy się sprawdzona już analiza.
+   */
+  otwarcie: number[];
+  wolumen: number[];
   /** Waluta notowania z Yahoo — "GBp" znaczy pensy, nie funty. */
   waluta: string;
 };
@@ -69,11 +78,23 @@ const CHART =
  * Używamy publicznego punktu `chart`, tego samego, z którego korzysta
  * yfinance po stronie Pythona — dostajemy z niego również WALUTĘ notowania,
  * co jest tu potrzebne do wykrycia pensów (patrz `skalaCeny`).
+ *
+ * `dopasowane` włącza korektę o dywidendy i splity, czyli odpowiednik
+ * `auto_adjust=True` w yfinance. DOMYŚLNIE WYŁĄCZONA i tak ma zostać dla
+ * analizy transakcji: tam porównujemy cenę, którą użytkownik NAPRAWDĘ
+ * zapłacił, z notowaniem z tamtego dnia, a cena skorygowana wstecz nie jest
+ * ceną, po której dało się kupić. Poziomy techniczne (`lib/poziomy.ts`) biorą
+ * odwrotnie — skorygowane, bo takie liczy pythonowy dossier i obie strony
+ * muszą dawać te same liczby.
  */
-export async function notowania(ticker: string): Promise<Notowania | null> {
+export async function notowania(
+  ticker: string,
+  zakres = "10y",
+  dopasowane = false,
+): Promise<Notowania | null> {
   try {
     const odp = await fetch(
-      `${CHART}${encodeURIComponent(ticker)}?range=10y&interval=1d`,
+      `${CHART}${encodeURIComponent(ticker)}?range=${encodeURIComponent(zakres)}&interval=1d`,
       {
         headers: { "User-Agent": "xtb-screener/1.0" },
         signal: AbortSignal.timeout(20000),
@@ -86,11 +107,15 @@ export async function notowania(ticker: string): Promise<Notowania | null> {
     const znaczniki: number[] | undefined = wynik?.timestamp;
     const kw = wynik?.indicators?.quote?.[0];
     if (!znaczniki || !kw) return null;
+    const skorygowana: (number | null)[] | undefined =
+      wynik?.indicators?.adjclose?.[0]?.adjclose;
 
     const dni: string[] = [];
     const zamkniecie: number[] = [];
     const najwyzsze: number[] = [];
     const najnizsze: number[] = [];
+    const otwarcie: number[] = [];
+    const wolumen: number[] = [];
     for (let i = 0; i < znaczniki.length; i++) {
       const c = kw.close?.[i];
       const h = kw.high?.[i];
@@ -100,10 +125,21 @@ export async function notowania(ticker: string): Promise<Notowania | null> {
       if (typeof c !== "number" || typeof h !== "number" || typeof l !== "number") {
         continue;
       }
+      const o = kw.open?.[i];
+      const v = kw.volume?.[i];
+      // Korekta o dywidendy i splity — odpowiednik `auto_adjust=True`
+      // w yfinance: ta sama proporcja nakładana na cały wiersz OHLC.
+      const skorygowane = dopasowane ? skorygowana?.[i] : undefined;
+      const wspolczynnik =
+        typeof skorygowane === "number" && c ? skorygowane / c : 1;
       dni.push(new Date(znaczniki[i] * 1000).toISOString().slice(0, 10));
-      zamkniecie.push(c);
-      najwyzsze.push(h);
-      najnizsze.push(l);
+      zamkniecie.push(c * wspolczynnik);
+      najwyzsze.push(h * wspolczynnik);
+      najnizsze.push(l * wspolczynnik);
+      // Brak otwarcia przy obecnym zamknięciu zdarza się rzadko; świeca bez
+      // korpusu jest lepsza niż zero, które zrobiłoby z sesji gigantyczną lukę.
+      otwarcie.push((typeof o === "number" ? o : c) * wspolczynnik);
+      wolumen.push(typeof v === "number" ? v : 0);
     }
     if (dni.length === 0) return null;
     return {
@@ -111,6 +147,8 @@ export async function notowania(ticker: string): Promise<Notowania | null> {
       zamkniecie,
       najwyzsze,
       najnizsze,
+      otwarcie,
+      wolumen,
       waluta: String(wynik?.meta?.currency ?? ""),
     };
   } catch {
